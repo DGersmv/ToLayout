@@ -47,15 +47,23 @@ bool RotateSelected (double angleDeg)
                 ACAPI_ELEMENT_MASK_SET(mask, API_LampType, angle);
                 break;
             case API_BeamID: {
-                // Поворот балки в плоскости XY - меняем направление begC -> endC (поворот вокруг оси Z)
+                // Поворот балки в плоскости XY вокруг центра балки (поворот вокруг оси Z)
                 const double dx = element.beam.endC.x - element.beam.begC.x;
                 const double dy = element.beam.endC.y - element.beam.begC.y;
                 const double beamLength = std::hypot(dx, dy);
+                const double halfLength = beamLength / 2.0;
                 const double currentAngle = std::atan2(dy, dx);
                 const double newAngle = currentAngle + addRad;
                 
-                element.beam.endC.x = element.beam.begC.x + beamLength * std::cos(newAngle);
-                element.beam.endC.y = element.beam.begC.y + beamLength * std::sin(newAngle);
+                // Центр балки
+                const double centerX = (element.beam.begC.x + element.beam.endC.x) / 2.0;
+                const double centerY = (element.beam.begC.y + element.beam.endC.y) / 2.0;
+                
+                // Поворот обеих точек вокруг центра
+                element.beam.begC.x = centerX - halfLength * std::cos(newAngle);
+                element.beam.begC.y = centerY - halfLength * std::sin(newAngle);
+                element.beam.endC.x = centerX + halfLength * std::cos(newAngle);
+                element.beam.endC.y = centerY + halfLength * std::sin(newAngle);
                 
                 ACAPI_ELEMENT_MASK_SET(mask, API_BeamType, begC);
                 ACAPI_ELEMENT_MASK_SET(mask, API_BeamType, endC);
