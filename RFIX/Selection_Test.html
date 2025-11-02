@@ -1080,58 +1080,6 @@
       }
     }
 
-    // ================= MORPH CREATION =================
-    async function CreateMorphUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      AddLog('[UI] Creating morph');
-      setInfo("info-morph", "Creating morph...");
-
-      const width = parseNumber(document.getElementById('morphWidth'), 1000);
-      const step  = parseNumber(document.getElementById('morphStep'), 500);
-      const thickness = parseNumber(document.getElementById('morphThickness'), 0);
-      
-      if (width <= 0) {
-        setInfo("info-morph", 'Width must be > 0');
-        return;
-      }
-      if (step <= 0) {
-        setInfo("info-morph", 'Step must be > 0');
-        return;
-      }
-      if (thickness < 0) {
-        setInfo("info-morph", 'Thickness must be >= 0');
-        return;
-      }
-
-      if (typeof A.CreateMorphFromContour === 'function') {
-        try {
-          // Получаем выбранные покрытия (surface finishes)
-          const materialTop = document.getElementById('morphMaterialTop').value;
-          const materialBottom = document.getElementById('morphMaterialBottom').value;
-          const materialSide = document.getElementById('morphMaterialSide').value;
-          
-          const params = "width:" + width + ",step:" + step + ",thickness:" + thickness + 
-                        ",materialTop:" + materialTop + ",materialBottom:" + materialBottom + ",materialSide:" + materialSide;
-          const success = await A.CreateMorphFromContour(params);
-          if (success) {
-            AddLog('[UI] ✅ Morph created successfully');
-            setInfo("info-morph", "✅ Morph created successfully");
-          } else {
-            AddLog('[UI] ❌ Error creating morph');
-            setInfo("info-morph", "❌ Error creating morph");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling CreateMorphFromContour: ' + err);
-          setInfo("info-morph", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function CreateMorphFromContour is unavailable');
-        setInfo("info-morph", "❌ Function unavailable (update the plugin)");
-      }
-    }
-
     function onShift(mm) {
       const m = parseFloat(mm) / 1000;
       AddLog(`[UI] Shift click, delta=${m} m`);
@@ -1140,60 +1088,6 @@
     function onLand() {
       AddLog(`[UI] Land click`);
       if (window.ACAPI_Call) ACAPI_Call('ApplyGroundOffset', 0.0);
-    }
-
-    // =============== Load Surface Finishes (покрытия) for Morph ===============
-    async function LoadMaterials() {
-      const A = window.ACAPI;
-      if (!A || typeof A.GetSurfaceFinishesList !== 'function') {
-        AddLog('[UI] ACAPI.GetSurfaceFinishesList unavailable');
-        return;
-      }
-
-      try {
-        const result = await A.GetSurfaceFinishesList();
-        if (result && result.finishes) {
-          const finishes = result.finishes;
-          
-          // Заполняем выпадающие списки
-          const selectTop = document.getElementById('morphMaterialTop');
-          const selectBottom = document.getElementById('morphMaterialBottom');
-          const selectSide = document.getElementById('morphMaterialSide');
-          
-          // Очищаем списки
-          selectTop.innerHTML = '';
-          selectBottom.innerHTML = '';
-          selectSide.innerHTML = '';
-          
-          // Добавляем покрытия (surface finishes)
-          for (let i = 0; i < finishes.length; i++) {
-            const finish = finishes[i];
-            const optionText = finish.index + ' - ' + (finish.name || 'Unnamed');
-            
-            const optionTop = document.createElement('option');
-            optionTop.value = finish.index;
-            optionTop.textContent = optionText;
-            if (finish.index === 1) optionTop.selected = true;
-            selectTop.appendChild(optionTop);
-            
-            const optionBottom = document.createElement('option');
-            optionBottom.value = finish.index;
-            optionBottom.textContent = optionText;
-            if (finish.index === 2) optionBottom.selected = true;
-            selectBottom.appendChild(optionBottom);
-            
-            const optionSide = document.createElement('option');
-            optionSide.value = finish.index;
-            optionSide.textContent = optionText;
-            if (finish.index === 3) optionSide.selected = true;
-            selectSide.appendChild(optionSide);
-          }
-          
-          AddLog('[UI] ✅ Surface finishes (покрытия) loaded: ' + finishes.length);
-        }
-      } catch (err) {
-        AddLog('[UI] ❌ Error loading surface finishes: ' + err);
-      }
     }
 
     // =============== tabs / init ===============
@@ -1206,11 +1100,6 @@
       if (tab) tab.style.display = "block";
       evt.currentTarget.classList.add("active");
       AddLog('[UI] Tab → ' + tabId);
-      
-      // Загружаем покрытия (surface finishes) при открытии вкладки Morph
-      if (tabId === 'tab-morph') {
-        whenACAPIReadyDo(LoadMaterials);
-      }
     }
     window.openTab = openTab;
 
@@ -1296,7 +1185,6 @@
     <button class="tablink" onclick="openTab(event,'tab-markup')">Markup</button>
     <button class="tablink" onclick="openTab(event,'tab-shell')">Contours</button>
     <button class="tablink" onclick="openTab(event,'tab-mesh')">Mesh</button>
-    <button class="tablink" onclick="openTab(event,'tab-morph')">Morph</button>
     <button class="tablink" onclick="openTab(event,'tab-id')">ID</button>
     <button class="tablink" onclick="openTab(event,'tab-layers')">Layers</button>
     <button class="tablink" onclick="openTab(event,'tab-columns')">Angle</button>
@@ -1531,84 +1419,6 @@
             data-help-title="Help: Mesh">Help</button>
   </div>
 
-  <!-- Morph -->
-  <div id="tab-morph" class="tabcontent">
-    <fieldset class="control-block">
-      <legend>Create Morph from Line</legend>
-
-      <div style="text-align:center; margin-bottom:10px;">
-        <input type="button" 
-               onclick="SelectBaseLine()" 
-               value="Select Line"
-               style="font-size:14px; padding:6px 15px; font-weight:bold;">
-      </div>
-
-      <div style="text-align:center; margin-bottom:10px;">
-        <input type="button" 
-               onclick="SetMeshForContours()" 
-               value="Set mesh"
-               style="font-size:14px; padding:6px 15px; font-weight:bold;">
-      </div>
-
-      <div>
-        <label>Width (mm):</label>
-        <input type="number" id="morphWidth" step="1" value="1000">
-      </div>
-
-      <div>
-        <label>Step (mm):</label>
-        <input type="number" id="morphStep" step="1" value="500">
-      </div>
-
-      <div>
-        <label>Thickness (mm, 0 = flat):</label>
-        <input type="number" id="morphThickness" step="1" value="0" min="0">
-      </div>
-
-      <div>
-        <label>Top Surface Finish (покрытие):</label>
-        <select id="morphMaterialTop" style="width:100%; padding:3px;">
-          <option value="1">Loading surface finishes...</option>
-        </select>
-      </div>
-
-      <div>
-        <label>Bottom Surface Finish (покрытие):</label>
-        <select id="morphMaterialBottom" style="width:100%; padding:3px;">
-          <option value="2">Loading surface finishes...</option>
-        </select>
-      </div>
-
-      <div>
-        <label>Side Surface Finish (покрытие):</label>
-        <select id="morphMaterialSide" style="width:100%; padding:3px;">
-          <option value="3">Loading surface finishes...</option>
-        </select>
-      </div>
-
-      <div style="text-align:center; margin-top:15px;">
-        <input type="button" 
-               onclick="whenACAPIReadyDo(CreateMorphUI)" 
-               value="Create morph"
-               style="font-size:16px; padding:8px 20px; font-weight:bold;">
-      </div>
-
-      <div id="info-morph" class="info-box">
-        Creates Morph element from base line with specified parameters.<br>
-        <strong>Workflow:</strong><br>
-        1. Click "Select Line" to select base line (spline/polyline/arc/line)<br>
-        2. Set Width, Step and Thickness parameters<br>
-        3. (Optional) Click "Set mesh" to select mesh surface for Z-coordinates<br>
-        4. Click "Create morph" - creates contour lines AND a Morph element from closed contour<br><br>
-        <strong>Note:</strong> If mesh is not set, Morph will be created at Z=0.0. If mesh is set, Morph follows the terrain surface.<br>
-        Thickness = 0 creates flat surface, Thickness > 0 creates volumetric Morph with bottom surface and side faces.
-      </div>
-    </fieldset>
-
-    <button class="tab-help"
-            data-help-url="https://landscape.227.info/help/morph"
-            data-help-title="Help: Morph">Help</button>
-  </div>
 
   <!-- ID -->
   <div id="tab-id" class="tabcontent">
