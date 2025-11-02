@@ -197,8 +197,8 @@ bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
     Log("[ShellHelper] CreateMeshFromPoints: START with %d points", (int)points.GetSize());
     
     const UIndex numPoints = points.GetSize();
-    if (numPoints != 3) {
-        Log("[ShellHelper] ERROR: Нужно ровно 3 точки для создания MESH");
+    if (numPoints < 3) {
+        Log("[ShellHelper] ERROR: Нужно минимум 3 точки для создания MESH");
         return false;
     }
     
@@ -211,12 +211,13 @@ bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
         return false;
     }
     
-    // Настройки для 3 точек (4 с замыкающей)
-    element.mesh.poly.nCoords = 4;
+    // nCoords = количество уникальных вершин + 1 (замыкающая точка)
+    element.mesh.poly.nCoords = numPoints + 1;
     element.mesh.poly.nSubPolys = 1;
     element.mesh.poly.nArcs = 0;
     
-    Log("[ShellHelper] MESH настройки: nCoords=4, nSubPolys=1, nArcs=0");
+    Log("[ShellHelper] MESH настройки: nCoords=%d (%d вершин + замыкающая), nSubPolys=1, nArcs=0", 
+        (int)element.mesh.poly.nCoords, (int)numPoints);
     
     // Создаем memo
     API_ElementMemo memo = {};
@@ -225,20 +226,19 @@ bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
     memo.parcs = reinterpret_cast<API_PolyArc**>(BMAllocateHandle(element.mesh.poly.nArcs * sizeof(API_PolyArc), ALLOCATE_CLEAR, 0));
     memo.meshPolyZ = reinterpret_cast<double**>(BMAllocateHandle((element.mesh.poly.nCoords + 1) * sizeof(double), ALLOCATE_CLEAR, 0));
     
-    // Заполняем координаты и Z (3 точки + замыкающая)
-    (*memo.coords)[1] = {points[0].x, points[0].y};
-    (*memo.coords)[2] = {points[1].x, points[1].y};
-    (*memo.coords)[3] = {points[2].x, points[2].y};
-    (*memo.coords)[4] = {points[0].x, points[0].y}; // Замыкаем треугольник (4-я точка = 1-я)
+    // Заполняем координаты и Z: все вершины + замыкающая
+    for (UIndex i = 0; i < numPoints; ++i) {
+        (*memo.coords)[i + 1] = {points[i].x, points[i].y};
+        (*memo.meshPolyZ)[i + 1] = points[i].z;
+    }
+    // Замыкаем полигон (последняя точка = первая)
+    (*memo.coords)[element.mesh.poly.nCoords] = (*memo.coords)[1];
+    (*memo.meshPolyZ)[element.mesh.poly.nCoords] = (*memo.meshPolyZ)[1];
     
-    (*memo.pends)[1] = element.mesh.poly.nCoords; // 4
+    (*memo.pends)[1] = element.mesh.poly.nCoords;
     
-    (*memo.meshPolyZ)[1] = points[0].z;
-    (*memo.meshPolyZ)[2] = points[1].z;
-    (*memo.meshPolyZ)[3] = points[2].z;
-    (*memo.meshPolyZ)[4] = points[0].z; // Замыкаем Z-координаты
-    
-    Log("[ShellHelper] MESH: точки заполнены");
+    Log("[ShellHelper] MESH: заполнены %d точек (%d вершин + замыкающая)", 
+        (int)element.mesh.poly.nCoords, (int)numPoints);
     
     // Создаем MESH
     err = ACAPI_Element_Create(&element, &memo);

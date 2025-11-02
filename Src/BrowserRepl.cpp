@@ -80,6 +80,35 @@ static double GetDoubleFromJs(GS::Ref<JS::Base> p, double def = 0.0)
 	return def;
 }
 
+// --- Extract integer from JS::Base (supports 123 / "123") ---
+static Int32 GetIntFromJs(GS::Ref<JS::Base> p, Int32 def = 0)
+{
+	if (p == nullptr) {
+		return def;
+	}
+
+	if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(p)) {
+		const auto t = v->GetType();
+
+		if (t == JS::Value::INTEGER) {
+			return v->GetInteger();
+		}
+		
+		if (t == JS::Value::DOUBLE) {
+			return static_cast<Int32>(v->GetDouble());
+		}
+
+		if (t == JS::Value::STRING) {
+			GS::UniString s = v->GetString();
+			Int32 out = def;
+			std::sscanf(s.ToCStr().Get(), "%d", &out);
+			return out;
+		}
+	}
+
+	return def;
+}
+
 
 static GS::UniString GetStringFromJavaScriptVariable(GS::Ref<JS::Base> jsVariable)
 {
@@ -628,7 +657,7 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		return new JS::Value(err == NoError && success);
 		}));
 
-	// --- Mesh API (создание Mesh из 3 точек) ---
+	// --- Mesh API (создание Mesh из N точек) ---
 	jsACAPI->AddItem(new JS::Function("CreateMeshFrom3Points", [](GS::Ref<JS::Base>) {
 		if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] CreateMeshFrom3Points() - создание Mesh из 3 точек");
 		
@@ -636,17 +665,18 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		bool success = false;
 		GSErrCode err = ACAPI_CallUndoableCommand("Create Mesh from 3 Points", [&]() -> GSErrCode {
 			GS::Array<API_Coord3D> points;
+			const Int32 numPoints = 3;
 			Int32 pointNum = 1;
 			
 			if (BrowserRepl::HasInstance()) {
 				BrowserRepl::GetInstance().LogToBrowser("[JS] Запрашиваем 3 точки у пользователя");
 			}
 			
-			// Ровно 3 точки
-			while (pointNum <= 3) {
+			// Ровно numPoints точек
+			while (pointNum <= numPoints) {
 				API_GetPointType gp = {};
 				char promptBuf[256];
-				std::sprintf(promptBuf, "Mesh: укажите точку %d/3", pointNum);
+				std::sprintf(promptBuf, "Mesh: укажите точку %d/%d", pointNum, numPoints);
 				CHTruncate(promptBuf, gp.prompt, sizeof(gp.prompt));
 				gp.changeFilter = false;
 				gp.changePlane = false;
@@ -665,7 +695,63 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 				pointNum++;
 			}
 			
-			if (points.GetSize() != 3) {
+			if (points.GetSize() != numPoints) {
+				return APIERR_BADPOLY;
+			}
+			
+			// Создаём Mesh из полученных точек через ShellHelper
+			success = ShellHelper::CreateMeshFromPoints(points);
+			if (!success) {
+				return APIERR_BADPOLY;
+			}
+			
+			return NoError;
+		});
+		
+		return new JS::Value(err == NoError && success);
+		}));
+	
+	jsACAPI->AddItem(new JS::Function("CreateMeshFromPoints", [](GS::Ref<JS::Base> param) {
+		// param содержит количество точек (число)
+		const Int32 numPoints = GetIntFromJs(param, 3);
+		
+		if (BrowserRepl::HasInstance()) {
+			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] CreateMeshFromPoints(%d) - создание Mesh из %d точек", numPoints, numPoints));
+		}
+		
+		bool success = false;
+		GSErrCode err = ACAPI_CallUndoableCommand("Create Mesh from Points", [&]() -> GSErrCode {
+			GS::Array<API_Coord3D> points;
+			Int32 pointNum = 1;
+			
+			if (BrowserRepl::HasInstance()) {
+				BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] Запрашиваем %d точек у пользователя", numPoints));
+			}
+			
+			// Запрашиваем numPoints точек
+			while (pointNum <= numPoints) {
+				API_GetPointType gp = {};
+				char promptBuf[256];
+				std::sprintf(promptBuf, "Mesh: укажите точку %d/%d", pointNum, numPoints);
+				CHTruncate(promptBuf, gp.prompt, sizeof(gp.prompt));
+				gp.changeFilter = false;
+				gp.changePlane = false;
+				
+				GSErrCode inputErr = ACAPI_UserInput_GetPoint(&gp);
+				
+				if (inputErr != NoError) {
+					if (BrowserRepl::HasInstance()) {
+						BrowserRepl::GetInstance().LogToBrowser("[JS] Отменено или ошибка при вводе точки");
+					}
+					return inputErr;
+				}
+				
+				// Фиксируем Z = 0.0 мм (на плане)
+				points.Push(API_Coord3D{gp.pos.x, gp.pos.y, 0.0});
+				pointNum++;
+			}
+			
+			if (points.GetSize() != numPoints) {
 				return APIERR_BADPOLY;
 			}
 			
