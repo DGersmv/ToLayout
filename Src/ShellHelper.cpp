@@ -192,9 +192,9 @@ bool CreateTestMesh()
 }
 
 // =============== Создание MESH из точек (для пользователя) ===============
-bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
+static bool CreateMeshFromPointsInternal(const GS::Array<API_Coord3D>& points)
 {
-    Log("[ShellHelper] CreateMeshFromPoints: START with %d points", (int)points.GetSize());
+    Log("[ShellHelper] CreateMeshFromPointsInternal: START with %d points", (int)points.GetSize());
     
     const UIndex numPoints = points.GetSize();
     if (numPoints < 3) {
@@ -242,6 +242,9 @@ bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
     
     // Создаем MESH
     err = ACAPI_Element_Create(&element, &memo);
+    if (err != NoError) {
+        Log("[ShellHelper] ERROR: ACAPI_Element_Create failed, err=%d (%s)", (int)err, ErrID_To_Name(err));
+    }
     if (err == APIERR_IRREGULARPOLY) {
         Log("[ShellHelper] Полигон нерегулярный, регуляризуем...");
         
@@ -301,6 +304,13 @@ bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
         ACAPI_DisposeElemMemoHdls(&memo);
         return false;
     }
+}
+
+bool CreateMeshFromPoints(const GS::Array<API_Coord3D>& points)
+{
+    return ACAPI_CallUndoableCommand("Create Mesh from Points", [&]() -> GSErrCode {
+        return CreateMeshFromPointsInternal(points) ? NoError : APIERR_GENERAL;
+    }) == NoError;
 }
 
 // =============== Основная функция создания оболочки ===============

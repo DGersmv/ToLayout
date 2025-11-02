@@ -662,54 +662,45 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] CreateMeshFrom3Points() - создание Mesh из 3 точек");
 		
 		// Запрашиваем 3 точки у пользователя и создаём Mesh
-		bool success = false;
-		GSErrCode err = ACAPI_CallUndoableCommand("Create Mesh from 3 Points", [&]() -> GSErrCode {
-			GS::Array<API_Coord3D> points;
-			const Int32 numPoints = 3;
-			Int32 pointNum = 1;
-			
-			if (BrowserRepl::HasInstance()) {
-				BrowserRepl::GetInstance().LogToBrowser("[JS] Запрашиваем 3 точки у пользователя");
-			}
-			
-			// Ровно numPoints точек
-			while (pointNum <= numPoints) {
-				API_GetPointType gp = {};
-				char promptBuf[256];
-				std::sprintf(promptBuf, "Mesh: укажите точку %d/%d", pointNum, numPoints);
-				CHTruncate(promptBuf, gp.prompt, sizeof(gp.prompt));
-				gp.changeFilter = false;
-				gp.changePlane = false;
-				
-				GSErrCode inputErr = ACAPI_UserInput_GetPoint(&gp);
-				
-				if (inputErr != NoError) {
-					if (BrowserRepl::HasInstance()) {
-						BrowserRepl::GetInstance().LogToBrowser("[JS] Отменено или ошибка при вводе точки");
-					}
-					return inputErr;
-				}
-				
-				// Вторая точка имеет Z = 2000 мм, остальные Z = 0
-				double zHeight = (pointNum == 2) ? 2000.0 : 0.0;
-				points.Push(API_Coord3D{gp.pos.x, gp.pos.y, zHeight});
-				pointNum++;
-			}
-			
-			if (points.GetSize() != numPoints) {
-				return APIERR_BADPOLY;
-			}
-			
-			// Создаём Mesh из полученных точек через ShellHelper
-			success = ShellHelper::CreateMeshFromPoints(points);
-			if (!success) {
-				return APIERR_BADPOLY;
-			}
-			
-			return NoError;
-		});
+		GS::Array<API_Coord3D> points;
+		const Int32 numPoints = 3;
+		Int32 pointNum = 1;
 		
-		return new JS::Value(err == NoError && success);
+		if (BrowserRepl::HasInstance()) {
+			BrowserRepl::GetInstance().LogToBrowser("[JS] Запрашиваем 3 точки у пользователя");
+		}
+		
+		// Ровно numPoints точек
+		while (pointNum <= numPoints) {
+			API_GetPointType gp = {};
+			char promptBuf[256];
+			std::sprintf(promptBuf, "Mesh: укажите точку %d/%d", pointNum, numPoints);
+			CHTruncate(promptBuf, gp.prompt, sizeof(gp.prompt));
+			gp.changeFilter = false;
+			gp.changePlane = false;
+			
+			GSErrCode inputErr = ACAPI_UserInput_GetPoint(&gp);
+			
+			if (inputErr != NoError) {
+				if (BrowserRepl::HasInstance()) {
+					BrowserRepl::GetInstance().LogToBrowser("[JS] Отменено или ошибка при вводе точки");
+				}
+				return new JS::Value(false);
+			}
+			
+			// Вторая точка имеет Z = 2000 мм, остальные Z = 0
+			double zHeight = (pointNum == 2) ? 2000.0 : 0.0;
+			points.Push(API_Coord3D{gp.pos.x, gp.pos.y, zHeight});
+			pointNum++;
+		}
+		
+		if (points.GetSize() != numPoints) {
+			return new JS::Value(false);
+		}
+		
+		// Создаём Mesh из полученных точек через ShellHelper (уже содержит ACAPI_CallUndoableCommand)
+		bool success = ShellHelper::CreateMeshFromPoints(points);
+		return new JS::Value(success);
 		}));
 	
 	jsACAPI->AddItem(new JS::Function("CreateMeshFromPoints", [](GS::Ref<JS::Base> param) {
@@ -720,52 +711,44 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] CreateMeshFromPoints(%d) - создание Mesh из %d точек", numPoints, numPoints));
 		}
 		
-		bool success = false;
-		GSErrCode err = ACAPI_CallUndoableCommand("Create Mesh from Points", [&]() -> GSErrCode {
-			GS::Array<API_Coord3D> points;
-			Int32 pointNum = 1;
-			
-			if (BrowserRepl::HasInstance()) {
-				BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] Запрашиваем %d точек у пользователя", numPoints));
-			}
-			
-			// Запрашиваем numPoints точек
-			while (pointNum <= numPoints) {
-				API_GetPointType gp = {};
-				char promptBuf[256];
-				std::sprintf(promptBuf, "Mesh: укажите точку %d/%d", pointNum, numPoints);
-				CHTruncate(promptBuf, gp.prompt, sizeof(gp.prompt));
-				gp.changeFilter = false;
-				gp.changePlane = false;
-				
-				GSErrCode inputErr = ACAPI_UserInput_GetPoint(&gp);
-				
-				if (inputErr != NoError) {
-					if (BrowserRepl::HasInstance()) {
-						BrowserRepl::GetInstance().LogToBrowser("[JS] Отменено или ошибка при вводе точки");
-					}
-					return inputErr;
-				}
-				
-				// Фиксируем Z = 2000.0 мм (2.0 метра)
-				points.Push(API_Coord3D{gp.pos.x, gp.pos.y, 2000.0});
-				pointNum++;
-			}
-			
-			if (points.GetSize() != numPoints) {
-				return APIERR_BADPOLY;
-			}
-			
-			// Создаём Mesh из полученных точек через ShellHelper
-			success = ShellHelper::CreateMeshFromPoints(points);
-			if (!success) {
-				return APIERR_BADPOLY;
-			}
-			
-			return NoError;
-		});
+		GS::Array<API_Coord3D> points;
+		Int32 pointNum = 1;
 		
-		return new JS::Value(err == NoError && success);
+		if (BrowserRepl::HasInstance()) {
+			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] Запрашиваем %d точек у пользователя", numPoints));
+		}
+		
+		// Запрашиваем numPoints точек
+		while (pointNum <= numPoints) {
+			API_GetPointType gp = {};
+			char promptBuf[256];
+			std::sprintf(promptBuf, "Mesh: укажите точку %d/%d", pointNum, numPoints);
+			CHTruncate(promptBuf, gp.prompt, sizeof(gp.prompt));
+			gp.changeFilter = false;
+			gp.changePlane = false;
+			
+			GSErrCode inputErr = ACAPI_UserInput_GetPoint(&gp);
+			
+			if (inputErr != NoError) {
+				if (BrowserRepl::HasInstance()) {
+					BrowserRepl::GetInstance().LogToBrowser("[JS] Отменено или ошибка при вводе точки");
+				}
+				return new JS::Value(false);
+			}
+			
+			// Вторая точка имеет Z = 2000 мм, остальные Z = 0
+			double zHeight = (pointNum == 2) ? 2000.0 : 0.0;
+			points.Push(API_Coord3D{gp.pos.x, gp.pos.y, zHeight});
+			pointNum++;
+		}
+		
+		if (points.GetSize() != numPoints) {
+			return new JS::Value(false);
+		}
+		
+		// Создаём Mesh из полученных точек через ShellHelper (уже содержит ACAPI_CallUndoableCommand)
+		bool success = ShellHelper::CreateMeshFromPoints(points);
+		return new JS::Value(success);
 		}));
 
 	// --- Create Morph from Contour ---
