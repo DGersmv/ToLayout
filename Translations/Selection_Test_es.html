@@ -296,6 +296,245 @@
       });
     }
 
+    // Храним полный список для фильтрации
+    let allLayersData = [];
+    
+    // Удалить префикс "Слои/" или "Layers/" из пути
+    function removeRootFolderPrefix(path) {
+      if (!path || path === '') return '';
+      // Проверяем, начинается ли путь с "Слои/" или "Layers/"
+      if (path.startsWith('Слои/')) {
+        return path.substring('Слои/'.length);
+      }
+      if (path.startsWith('Layers/')) {
+        return path.substring('Layers/'.length);
+      }
+      // Проверяем без слэша в конце
+      if (path === 'Слои' || path === 'Layers') {
+        return '';
+      }
+      return path;
+    }
+    
+    // =============== folder/layer list loading ===============
+    function loadExistingLayersList(filterText = '') {
+      const A = window.ACAPI;
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl) return;
+
+      listEl.innerHTML = '<option value="">Cargando...</option>';
+
+      if (!A) {
+        listEl.innerHTML = '<option value="">ACAPI no disponible</option>';
+        return;
+      }
+
+      // Si la función para obtener la lista de capas existe, la llamamos
+      if (typeof A.GetLayersList === 'function') {
+        A.GetLayersList().then(function(layersData) {
+          if (!layersData || layersData.length === 0) {
+            listEl.innerHTML = '<option value="">No se encontraron capas</option>';
+            allLayersData = [];
+            return;
+          }
+
+          // Guardamos la lista completa para filtrar
+          allLayersData = [];
+          
+          // Convertimos array de arrays en array de objetos
+          for (let i = 0; i < layersData.length; i++) {
+            const item = layersData[i];
+            if (Array.isArray(item) && item.length >= 2) {
+              allLayersData.push({
+                name: item[0] || '',
+                folder: item[1] || ''
+              });
+            }
+          }
+
+          // Aplicamos el filtro
+          filterLayersList(filterText);
+        }).catch(function(err) {
+          AddLog('[UI] Error al cargar lista de capas: ' + err);
+          listEl.innerHTML = '<option value="">Error al cargar capas</option>';
+          allLayersData = [];
+        });
+      } else {
+        // La función aún no está implementada, dejamos un placeholder
+        listEl.innerHTML = '<option value="">Función GetLayersList aún no disponible</option>';
+        AddLog('[UI] Función GetLayersList no disponible');
+        allLayersData = [];
+      }
+    }
+
+    function filterLayersList(filterText = '') {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl) return;
+
+      listEl.innerHTML = '';
+      
+      if (allLayersData.length === 0) {
+        listEl.innerHTML = '<option value="">No se encontraron capas</option>';
+        return;
+      }
+
+      // Normalizamos el texto del filtro
+      const filter = filterText.trim().toLowerCase();
+      
+      // Agrupamos por carpetas
+      const folders = {};
+      const rootLayers = [];
+      const folderSet = new Set(); // Para rastrear carpetas únicas
+
+      for (let i = 0; i < allLayersData.length; i++) {
+        const item = allLayersData[i];
+        const folderPath = item.folder || '';
+        const layerName = item.name || '';
+        
+        // Verificamos si coincide con el filtro
+        const matchesFilter = !filter || 
+          folderPath.toLowerCase().startsWith(filter) || 
+          layerName.toLowerCase().startsWith(filter);
+        
+        if (!matchesFilter) continue;
+        
+        // Agregamos carpetas al conjunto
+        if (folderPath) {
+          const pathParts = folderPath.split('/').filter(p => p);
+          let currentPath = '';
+          for (let j = 0; j < pathParts.length; j++) {
+            currentPath = currentPath ? currentPath + '/' + pathParts[j] : pathParts[j];
+            if (!filter || currentPath.toLowerCase().startsWith(filter)) {
+              folderSet.add(currentPath);
+            }
+          }
+        }
+        
+        if (!folderPath || folderPath === '') {
+          rootLayers.push({ name: layerName, fullPath: layerName, isFolder: false });
+        } else {
+          const pathParts = folderPath.split('/').filter(p => p);
+          let current = folders;
+          
+          // Creamos estructura de carpetas
+          for (let j = 0; j < pathParts.length; j++) {
+            const part = pathParts[j];
+            if (!current[part]) {
+              current[part] = { _layers: [], _subfolders: {} };
+            }
+            if (j === pathParts.length - 1) {
+              // Última carpeta - agregamos capa
+              const fullPath = folderPath + '/' + layerName;
+              current[part]._layers.push({ name: layerName, fullPath: fullPath, folderPath: folderPath });
+            } else {
+              // Carpeta intermedia - vamos más profundo
+              current = current[part]._subfolders;
+            }
+          }
+        }
+      }
+
+      // Agregamos capas raíz
+      rootLayers.sort((a, b) => a.name.localeCompare(b.name));
+      for (let i = 0; i < rootLayers.length; i++) {
+        const opt = document.createElement('option');
+        opt.value = rootLayers[i].fullPath;
+        opt.textContent = '📄 ' + rootLayers[i].name;
+        opt.dataset.type = 'layer';
+        opt.dataset.folder = '';
+        opt.dataset.layer = rootLayers[i].name;
+        listEl.appendChild(opt);
+      }
+
+      // Agregamos carpetas y capas en ellas
+      function addFoldersToSelect(foldersObj, prefix = '') {
+        const folderNames = Object.keys(foldersObj).sort();
+        for (let i = 0; i < folderNames.length; i++) {
+          const folderName = folderNames[i];
+          if (folderName.startsWith('_')) continue;
+
+          const folder = foldersObj[folderName];
+          const currentPath = prefix ? prefix + '/' + folderName : folderName;
+
+          // Verificamos si la carpeta debe mostrarse (si hay filtro)
+          if (filter && !currentPath.toLowerCase().startsWith(filter) && 
+              (!folder._layers || folder._layers.length === 0)) {
+            // Saltamos la carpeta si no coincide con el filtro y no contiene capas
+            if (folder._subfolders && Object.keys(folder._subfolders).length > 0) {
+              // Pero continuamos recursivamente si hay subcarpetas
+              addFoldersToSelect(folder._subfolders, currentPath);
+            }
+            continue;
+          }
+
+          // Agregamos la carpeta
+          const folderOpt = document.createElement('option');
+          folderOpt.value = currentPath;
+          folderOpt.textContent = '📁 ' + currentPath;
+          folderOpt.style.fontWeight = 'bold';
+          folderOpt.dataset.type = 'folder';
+          folderOpt.dataset.folder = currentPath;
+          listEl.appendChild(folderOpt);
+
+          // Agregamos capas en la carpeta
+          if (folder._layers && folder._layers.length > 0) {
+            folder._layers.sort((a, b) => a.name.localeCompare(b.name));
+            for (let j = 0; j < folder._layers.length; j++) {
+              const layer = folder._layers[j];
+              const layerOpt = document.createElement('option');
+              layerOpt.value = layer.fullPath;
+              layerOpt.textContent = '  └─ 📄 ' + layer.name;
+              layerOpt.dataset.type = 'layer';
+              layerOpt.dataset.folder = layer.folderPath;
+              layerOpt.dataset.layer = layer.name;
+              listEl.appendChild(layerOpt);
+            }
+          }
+
+          // Recursivamente agregamos subcarpetas
+          if (folder._subfolders && Object.keys(folder._subfolders).length > 0) {
+            addFoldersToSelect(folder._subfolders, currentPath);
+          }
+        }
+      }
+
+      addFoldersToSelect(folders);
+
+      if (listEl.options.length === 0) {
+        listEl.innerHTML = '<option value="">No se encontraron capas coincidentes</option>';
+      }
+    }
+
+    function selectFromList() {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl || listEl.selectedIndex < 0) return;
+
+      const selectedOption = listEl.options[listEl.selectedIndex];
+      if (!selectedOption || !selectedOption.value) return;
+
+      const optionType = selectedOption.dataset.type || '';
+      
+      if (optionType === 'folder') {
+        // Es una carpeta
+        const folderPath = selectedOption.dataset.folder || selectedOption.value;
+        // Eliminamos el prefijo "Слои/" o "Layers/" del camino
+        const cleanFolderPath = removeRootFolderPrefix(folderPath);
+        document.getElementById('layerFolder').value = cleanFolderPath;
+        document.getElementById('layerName').value = '';
+        AddLog('[UI] Carpeta seleccionada: ' + cleanFolderPath);
+      } else if (optionType === 'layer') {
+        // Es una capa
+        const folderPath = selectedOption.dataset.folder || '';
+        const layerName = selectedOption.dataset.layer || '';
+        
+        // Eliminamos el prefijo "Слои/" o "Layers/" del camino
+        const cleanFolderPath = removeRootFolderPrefix(folderPath);
+        document.getElementById('layerFolder').value = cleanFolderPath;
+        document.getElementById('layerName').value = layerName;
+        AddLog('[UI] Capa seleccionada: ' + (cleanFolderPath ? cleanFolderPath + ' / ' : '') + layerName);
+      }
+    }
+
     // =============== folder/layer creation + move ===============
     function createLayerAndMoveElements() {
       const A = window.ACAPI;
@@ -304,22 +543,25 @@
         return;
       }
 
-      const folderPath = document.getElementById('layerFolder').value.trim();
+      let folderPath = document.getElementById('layerFolder').value.trim();
       const layerName  = document.getElementById('layerName').value.trim();
       const hideLayer = document.getElementById('hideLayer').checked;
 
-      if (!folderPath) {
-        AddLog('[UI] Enter the folder path for layers');
+      // Eliminamos el prefijo "Слои/" o "Layers/" del camino antes de enviar
+      folderPath = removeRootFolderPrefix(folderPath);
+
+      if (!folderPath && !layerName) {
+        AddLog('[UI] Ingrese la ruta de la carpeta o el nombre de la capa');
         document.getElementById('layerFolder').focus();
         return;
       }
       if (!layerName) {
-        AddLog('[UI] Enter the layer name');
+        AddLog('[UI] Ingrese el nombre de la capa');
         document.getElementById('layerName').focus();
         return;
       }
 
-      AddLog('[UI] Creating folder: ' + folderPath + ', layer: ' + layerName + ', hide: ' + hideLayer);
+      AddLog('[UI] Creando carpeta: ' + folderPath + ', capa: ' + layerName + ', ocultar: ' + hideLayer);
       setInfo("info-layers", "Creando carpeta, capa y moviendo elementos seleccionados...");
 
       if (typeof A.CreateLayerAndMoveElements === 'function') {
@@ -331,21 +573,29 @@
         A.CreateLayerAndMoveElements(params).then(function(success) {
           AddLog('[JS] CreateLayerAndMoveElements returned: ' + success);
           if (success) {
-            AddLog('[UI] ✅ Folder/layer created, elements moved!');
+            AddLog('[UI] ✅ ¡Carpeta/capa creada, elementos movidos!');
             setInfo("info-layers", "✅ ¡Éxito! Carpeta: " + folderPath + ", Capa: " + layerName);
+            
+            // Limpiamos los campos de entrada
             document.getElementById('layerFolder').value  = '';
             document.getElementById('layerName').value    = '';
+            
+            // Actualizamos la lista de capas existentes después de un pequeño retraso (para que ArchiCAD actualice la estructura)
+            setTimeout(function() {
+              loadExistingLayersList(''); // Cargamos sin filtro para mostrar todas las capas y carpetas
+            }, 500);
+            
             setTimeout(UpdateSelectedElements, 1000);
           } else {
-            AddLog('[UI] ❌ Error creating folder/layer or moving elements');
+            AddLog('[UI] ❌ Error al crear carpeta/capa o mover elementos');
             setInfo("info-layers", "❌ ¡Error! Verifique los datos ingresados/selección.");
           }
         }).catch(function(err) {
-          AddLog('[UI] ❌ Error calling CreateLayerAndMoveElements: ' + err);
+          AddLog('[UI] ❌ Error al llamar CreateLayerAndMoveElements: ' + err);
           setInfo("info-layers", "❌ Error: " + err);
         });
       } else {
-        AddLog('[UI] ❌ Function CreateLayerAndMoveElements is unavailable');
+        AddLog('[UI] ❌ Función CreateLayerAndMoveElements no disponible');
         setInfo("info-layers", "❌ Función no disponible (actualice el complemento)");
       }
     }
@@ -1110,6 +1360,13 @@
       if (tab) tab.style.display = "block";
       evt.currentTarget.classList.add("active");
       AddLog('[UI] Tab → ' + tabId);
+      
+      // Cargamos la lista de capas al abrir la pestaña Layers
+      if (tabId === 'tab-layers') {
+        whenACAPIReadyDo(function() {
+          loadExistingLayersList();
+        });
+      }
     }
     window.openTab = openTab;
 
@@ -1127,6 +1384,14 @@
       document.getElementById('baseID')      ?.addEventListener('keydown', e => { if (e.key === 'Enter') changeAllSelectedIDs(); });
       document.getElementById('layerFolder') ?.addEventListener('keydown', e => { if (e.key === 'Enter') createLayerAndMoveElements(); });
       document.getElementById('layerName')   ?.addEventListener('keydown', e => { if (e.key === 'Enter') createLayerAndMoveElements(); });
+      
+      // Filtrado de lista de capas al escribir en el campo Layer Folder
+      document.getElementById('layerFolder')?.addEventListener('input', function(e) {
+        const filterText = e.target.value.trim();
+        if (allLayersData.length > 0) {
+          filterLayersList(filterText);
+        }
+      });
       
       // Markup
       document.getElementById('markupStep')  ?.addEventListener('keydown', e => { if (e.key === 'Enter') whenACAPIReadyDo(SetMarkupStepUI); });
@@ -1455,16 +1720,29 @@
     <fieldset class="control-block">
       <legend>Crear carpeta/capa y mover elementos</legend>
 
-      <div>
-        <label>Carpeta de capa:</label>
-        <input type="text" id="layerFolder" placeholder="ej.: Paisaje/Plantas" style="width: 250px; padding: 3px; margin: 3px 0;" />
-        <br>
-        <small style="color:#666;">Separe subcarpetas con "/" (ej.: "Paisaje/Plantas/Árboles")</small>
+      <div style="display: flex; gap: 15px; align-items: flex-start; margin-bottom: 10px;">
+        <div style="flex: 1;">
+          <label style="display: block; margin-bottom: 5px;">Carpeta de capa:</label>
+          <input type="text" id="layerFolder" placeholder="ej.: Paisaje/Plantas" style="width: 100%; padding: 5px; margin-bottom: 5px;" />
+          <small style="color:#666; font-size:11px;">Separe subcarpetas con "/" (ej.: "Paisaje/Plantas/Árboles")</small>
+        </div>
+
+        <div style="flex: 1;">
+          <label style="display: block; margin-bottom: 5px;">Nueva capa:</label>
+          <input type="text" id="layerName" placeholder="ej.: Pinos comunes" style="width: 100%; padding: 5px;" />
+        </div>
       </div>
 
-      <div>
-        <label>Nueva capa:</label>
-        <input type="text" id="layerName" placeholder="ej.: Pinos comunes" style="width: 250px; padding: 3px; margin: 3px 0;" />
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: bold; display: block; margin-bottom: 5px;">Carpetas y capas existentes:</label>
+        <select id="existingLayersList" 
+                size="8" 
+                style="width: 100%; padding: 5px; font-family: monospace; font-size: 12px; border: 1px solid #aaa; border-radius: 4px; background: #f9f9f9;"
+                onchange="selectFromList()"
+                ondblclick="selectFromList()">
+          <option value="">Cargando...</option>
+        </select>
+        <small style="color:#666; font-size:11px;">Seleccione o haga doble clic para usar carpeta/capa</small>
       </div>
 
       <div style="text-align:left; margin-top:10px;">

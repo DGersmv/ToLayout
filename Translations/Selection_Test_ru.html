@@ -296,6 +296,245 @@
       });
     }
 
+    // Храним полный список для фильтрации
+    let allLayersData = [];
+    
+    // Удалить префикс "Слои/" или "Layers/" из пути
+    function removeRootFolderPrefix(path) {
+      if (!path || path === '') return '';
+      // Проверяем, начинается ли путь с "Слои/" или "Layers/"
+      if (path.startsWith('Слои/')) {
+        return path.substring('Слои/'.length);
+      }
+      if (path.startsWith('Layers/')) {
+        return path.substring('Layers/'.length);
+      }
+      // Проверяем без слэша в конце
+      if (path === 'Слои' || path === 'Layers') {
+        return '';
+      }
+      return path;
+    }
+    
+    // =============== folder/layer list loading ===============
+    function loadExistingLayersList(filterText = '') {
+      const A = window.ACAPI;
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl) return;
+
+      listEl.innerHTML = '<option value="">Загрузка...</option>';
+
+      if (!A) {
+        listEl.innerHTML = '<option value="">ACAPI недоступен</option>';
+        return;
+      }
+
+      // Если функция для получения списка слоев есть, вызываем её
+      if (typeof A.GetLayersList === 'function') {
+        A.GetLayersList().then(function(layersData) {
+          if (!layersData || layersData.length === 0) {
+            listEl.innerHTML = '<option value="">Слои не найдены</option>';
+            allLayersData = [];
+            return;
+          }
+
+          // Сохраняем полный список для фильтрации
+          allLayersData = [];
+          
+          // Преобразуем массив массивов в массив объектов
+          for (let i = 0; i < layersData.length; i++) {
+            const item = layersData[i];
+            if (Array.isArray(item) && item.length >= 2) {
+              allLayersData.push({
+                name: item[0] || '',
+                folder: item[1] || ''
+              });
+            }
+          }
+
+          // Применяем фильтрацию
+          filterLayersList(filterText);
+        }).catch(function(err) {
+          AddLog('[UI] Ошибка загрузки списка слоев: ' + err);
+          listEl.innerHTML = '<option value="">Ошибка загрузки слоев</option>';
+          allLayersData = [];
+        });
+      } else {
+        // Функция пока не реализована, оставляем заглушку
+        listEl.innerHTML = '<option value="">Функция GetLayersList пока недоступна</option>';
+        AddLog('[UI] Функция GetLayersList недоступна');
+        allLayersData = [];
+      }
+    }
+
+    function filterLayersList(filterText = '') {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl) return;
+
+      listEl.innerHTML = '';
+      
+      if (allLayersData.length === 0) {
+        listEl.innerHTML = '<option value="">Слои не найдены</option>';
+        return;
+      }
+
+      // Нормализуем текст фильтра
+      const filter = filterText.trim().toLowerCase();
+      
+      // Группируем по папкам
+      const folders = {};
+      const rootLayers = [];
+      const folderSet = new Set(); // Для отслеживания уникальных папок
+
+      for (let i = 0; i < allLayersData.length; i++) {
+        const item = allLayersData[i];
+        const folderPath = item.folder || '';
+        const layerName = item.name || '';
+        
+        // Проверяем соответствие фильтру
+        const matchesFilter = !filter || 
+          folderPath.toLowerCase().startsWith(filter) || 
+          layerName.toLowerCase().startsWith(filter);
+        
+        if (!matchesFilter) continue;
+        
+        // Добавляем папки в множество
+        if (folderPath) {
+          const pathParts = folderPath.split('/').filter(p => p);
+          let currentPath = '';
+          for (let j = 0; j < pathParts.length; j++) {
+            currentPath = currentPath ? currentPath + '/' + pathParts[j] : pathParts[j];
+            if (!filter || currentPath.toLowerCase().startsWith(filter)) {
+              folderSet.add(currentPath);
+            }
+          }
+        }
+        
+        if (!folderPath || folderPath === '') {
+          rootLayers.push({ name: layerName, fullPath: layerName, isFolder: false });
+        } else {
+          const pathParts = folderPath.split('/').filter(p => p);
+          let current = folders;
+          
+          // Создаем структуру папок
+          for (let j = 0; j < pathParts.length; j++) {
+            const part = pathParts[j];
+            if (!current[part]) {
+              current[part] = { _layers: [], _subfolders: {} };
+            }
+            if (j === pathParts.length - 1) {
+              // Последняя папка - добавляем слой
+              const fullPath = folderPath + '/' + layerName;
+              current[part]._layers.push({ name: layerName, fullPath: fullPath, folderPath: folderPath });
+            } else {
+              // Промежуточная папка - переходим глубже
+              current = current[part]._subfolders;
+            }
+          }
+        }
+      }
+
+      // Добавляем корневые слои
+      rootLayers.sort((a, b) => a.name.localeCompare(b.name));
+      for (let i = 0; i < rootLayers.length; i++) {
+        const opt = document.createElement('option');
+        opt.value = rootLayers[i].fullPath;
+        opt.textContent = '📄 ' + rootLayers[i].name;
+        opt.dataset.type = 'layer';
+        opt.dataset.folder = '';
+        opt.dataset.layer = rootLayers[i].name;
+        listEl.appendChild(opt);
+      }
+
+      // Добавляем папки и слои в них
+      function addFoldersToSelect(foldersObj, prefix = '') {
+        const folderNames = Object.keys(foldersObj).sort();
+        for (let i = 0; i < folderNames.length; i++) {
+          const folderName = folderNames[i];
+          if (folderName.startsWith('_')) continue;
+
+          const folder = foldersObj[folderName];
+          const currentPath = prefix ? prefix + '/' + folderName : folderName;
+
+          // Проверяем, должна ли папка быть показана (если есть фильтр)
+          if (filter && !currentPath.toLowerCase().startsWith(filter) && 
+              (!folder._layers || folder._layers.length === 0)) {
+            // Пропускаем папку, если она не соответствует фильтру и не содержит слои
+            if (folder._subfolders && Object.keys(folder._subfolders).length > 0) {
+              // Но продолжаем рекурсивно, если есть подпапки
+              addFoldersToSelect(folder._subfolders, currentPath);
+            }
+            continue;
+          }
+
+          // Добавляем папку
+          const folderOpt = document.createElement('option');
+          folderOpt.value = currentPath;
+          folderOpt.textContent = '📁 ' + currentPath;
+          folderOpt.style.fontWeight = 'bold';
+          folderOpt.dataset.type = 'folder';
+          folderOpt.dataset.folder = currentPath;
+          listEl.appendChild(folderOpt);
+
+          // Добавляем слои в папке
+          if (folder._layers && folder._layers.length > 0) {
+            folder._layers.sort((a, b) => a.name.localeCompare(b.name));
+            for (let j = 0; j < folder._layers.length; j++) {
+              const layer = folder._layers[j];
+              const layerOpt = document.createElement('option');
+              layerOpt.value = layer.fullPath;
+              layerOpt.textContent = '  └─ 📄 ' + layer.name;
+              layerOpt.dataset.type = 'layer';
+              layerOpt.dataset.folder = layer.folderPath;
+              layerOpt.dataset.layer = layer.name;
+              listEl.appendChild(layerOpt);
+            }
+          }
+
+          // Рекурсивно добавляем подпапки
+          if (folder._subfolders && Object.keys(folder._subfolders).length > 0) {
+            addFoldersToSelect(folder._subfolders, currentPath);
+          }
+        }
+      }
+
+      addFoldersToSelect(folders);
+
+      if (listEl.options.length === 0) {
+        listEl.innerHTML = '<option value="">Нет соответствующих слоев</option>';
+      }
+    }
+
+    function selectFromList() {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl || listEl.selectedIndex < 0) return;
+
+      const selectedOption = listEl.options[listEl.selectedIndex];
+      if (!selectedOption || !selectedOption.value) return;
+
+      const optionType = selectedOption.dataset.type || '';
+      
+      if (optionType === 'folder') {
+        // Это папка
+        const folderPath = selectedOption.dataset.folder || selectedOption.value;
+        // Удаляем префикс "Слои/" или "Layers/" из пути
+        const cleanFolderPath = removeRootFolderPrefix(folderPath);
+        document.getElementById('layerFolder').value = cleanFolderPath;
+        document.getElementById('layerName').value = '';
+        AddLog('[UI] Выбрана папка: ' + cleanFolderPath);
+      } else if (optionType === 'layer') {
+        // Это слой
+        const folderPath = selectedOption.dataset.folder || '';
+        const layerName = selectedOption.dataset.layer || '';
+        
+        // Удаляем префикс "Слои/" или "Layers/" из пути
+        const cleanFolderPath = removeRootFolderPrefix(folderPath);
+        document.getElementById('layerFolder').value = cleanFolderPath;
+        document.getElementById('layerName').value = layerName;
+        AddLog('[UI] Выбран слой: ' + (cleanFolderPath ? cleanFolderPath + ' / ' : '') + layerName);
+      }
+    }
+
     // =============== folder/layer creation + move ===============
     function createLayerAndMoveElements() {
       const A = window.ACAPI;
@@ -304,22 +543,25 @@
         return;
       }
 
-      const folderPath = document.getElementById('layerFolder').value.trim();
+      let folderPath = document.getElementById('layerFolder').value.trim();
       const layerName  = document.getElementById('layerName').value.trim();
       const hideLayer = document.getElementById('hideLayer').checked;
 
-      if (!folderPath) {
-        AddLog('[UI] Enter the folder path for layers');
+      // Удаляем префикс "Слои/" или "Layers/" из пути перед отправкой
+      folderPath = removeRootFolderPrefix(folderPath);
+
+      if (!folderPath && !layerName) {
+        AddLog('[UI] Введите путь к папке или имя слоя');
         document.getElementById('layerFolder').focus();
         return;
       }
       if (!layerName) {
-        AddLog('[UI] Enter the layer name');
+        AddLog('[UI] Введите имя слоя');
         document.getElementById('layerName').focus();
         return;
       }
 
-      AddLog('[UI] Creating folder: ' + folderPath + ', layer: ' + layerName + ', hide: ' + hideLayer);
+      AddLog('[UI] Создание папки: ' + folderPath + ', слой: ' + layerName + ', скрыть: ' + hideLayer);
       setInfo("info-layers", "Создание папки, слоя и перемещение выбранных элементов...");
 
       if (typeof A.CreateLayerAndMoveElements === 'function') {
@@ -331,21 +573,29 @@
         A.CreateLayerAndMoveElements(params).then(function(success) {
           AddLog('[JS] CreateLayerAndMoveElements returned: ' + success);
           if (success) {
-            AddLog('[UI] ✅ Folder/layer created, elements moved!');
+            AddLog('[UI] ✅ Папка/слой созданы, элементы перемещены!');
             setInfo("info-layers", "✅ Успешно! Папка: " + folderPath + ", Слой: " + layerName);
+            
+            // Очищаем поля ввода
             document.getElementById('layerFolder').value  = '';
             document.getElementById('layerName').value    = '';
+            
+            // Обновляем список существующих слоев после небольшой задержки (чтобы ArchiCAD успел обновить структуру)
+            setTimeout(function() {
+              loadExistingLayersList(''); // Загружаем без фильтра, чтобы показать все слои и папки
+            }, 500);
+            
             setTimeout(UpdateSelectedElements, 1000);
           } else {
-            AddLog('[UI] ❌ Error creating folder/layer or moving elements');
+            AddLog('[UI] ❌ Ошибка создания папки/слоя или перемещения элементов');
             setInfo("info-layers", "❌ Ошибка! Проверьте введенные данные/выбор.");
           }
         }).catch(function(err) {
-          AddLog('[UI] ❌ Error calling CreateLayerAndMoveElements: ' + err);
+          AddLog('[UI] ❌ Ошибка вызова CreateLayerAndMoveElements: ' + err);
           setInfo("info-layers", "❌ Ошибка: " + err);
         });
       } else {
-        AddLog('[UI] ❌ Function CreateLayerAndMoveElements is unavailable');
+        AddLog('[UI] ❌ Функция CreateLayerAndMoveElements недоступна');
         setInfo("info-layers", "❌ Функция недоступна (обновите плагин)");
       }
     }
@@ -1110,6 +1360,13 @@
       if (tab) tab.style.display = "block";
       evt.currentTarget.classList.add("active");
       AddLog('[UI] Tab → ' + tabId);
+      
+      // Загружаем список слоев при открытии вкладки Layers
+      if (tabId === 'tab-layers') {
+        whenACAPIReadyDo(function() {
+          loadExistingLayersList();
+        });
+      }
     }
     window.openTab = openTab;
 
@@ -1127,6 +1384,14 @@
       document.getElementById('baseID')      ?.addEventListener('keydown', e => { if (e.key === 'Enter') changeAllSelectedIDs(); });
       document.getElementById('layerFolder') ?.addEventListener('keydown', e => { if (e.key === 'Enter') createLayerAndMoveElements(); });
       document.getElementById('layerName')   ?.addEventListener('keydown', e => { if (e.key === 'Enter') createLayerAndMoveElements(); });
+      
+      // Фильтрация списка слоев при вводе в поле Layer Folder
+      document.getElementById('layerFolder')?.addEventListener('input', function(e) {
+        const filterText = e.target.value.trim();
+        if (allLayersData.length > 0) {
+          filterLayersList(filterText);
+        }
+      });
       
       // Markup
       document.getElementById('markupStep')  ?.addEventListener('keydown', e => { if (e.key === 'Enter') whenACAPIReadyDo(SetMarkupStepUI); });
@@ -1455,16 +1720,29 @@
     <fieldset class="control-block">
       <legend>Создать папку/слой и переместить элементы</legend>
 
-      <div>
-        <label>Папка слоя:</label>
-        <input type="text" id="layerFolder" placeholder="например: Ландшафт/Растения" style="width: 250px; padding: 3px; margin: 3px 0;" />
-        <br>
-        <small style="color:#666;">Разделяйте подпапки символом "/" (например: "Ландшафт/Растения/Деревья")</small>
+      <div style="display: flex; gap: 15px; align-items: flex-start; margin-bottom: 10px;">
+        <div style="flex: 1;">
+          <label style="display: block; margin-bottom: 5px;">Папка слоя:</label>
+          <input type="text" id="layerFolder" placeholder="например: Ландшафт/Растения" style="width: 100%; padding: 5px; margin-bottom: 5px;" />
+          <small style="color:#666; font-size:11px;">Разделяйте подпапки символом "/" (например: "Ландшафт/Растения/Деревья")</small>
+        </div>
+
+        <div style="flex: 1;">
+          <label style="display: block; margin-bottom: 5px;">Новый слой:</label>
+          <input type="text" id="layerName" placeholder="например: Сосны обыкновенные" style="width: 100%; padding: 5px;" />
+        </div>
       </div>
 
-      <div>
-        <label>Новый слой:</label>
-        <input type="text" id="layerName" placeholder="например: Сосны обыкновенные" style="width: 250px; padding: 3px; margin: 3px 0;" />
+      <div style="margin-bottom: 15px;">
+        <label style="font-weight: bold; display: block; margin-bottom: 5px;">Существующие папки и слои:</label>
+        <select id="existingLayersList" 
+                size="8" 
+                style="width: 100%; padding: 5px; font-family: monospace; font-size: 12px; border: 1px solid #aaa; border-radius: 4px; background: #f9f9f9;"
+                onchange="selectFromList()"
+                ondblclick="selectFromList()">
+          <option value="">Загрузка...</option>
+        </select>
+        <small style="color:#666; font-size:11px;">Выберите или дважды щелкните для использования папки/слоя</small>
       </div>
 
       <div style="text-align:left; margin-top:10px;">
