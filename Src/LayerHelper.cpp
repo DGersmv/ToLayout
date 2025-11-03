@@ -3,7 +3,65 @@
 
 namespace LayerHelper {
 
-// ---------------- Разбить путь к папке на массив ----------------
+// ---------------- Удалить префикс "Слои/" или "Layers/" из пути ---------------- 
+static GS::UniString RemoveRootFolderPrefix(const GS::UniString& path)
+{
+    if (path.IsEmpty()) {
+        return path;
+    }
+    
+    // Проверяем, начинается ли путь с "Слои/" или "Layers/"
+    GS::UniString prefix1 = "Слои/";
+    GS::UniString prefix2 = "Layers/";
+    
+    if (path.GetLength() >= prefix1.GetLength() && 
+        path.GetSubstring(0, prefix1.GetLength()) == prefix1) {
+        return path.GetSubstring(prefix1.GetLength(), path.GetLength() - prefix1.GetLength());
+    }
+    
+    if (path.GetLength() >= prefix2.GetLength() && 
+        path.GetSubstring(0, prefix2.GetLength()) == prefix2) {
+        return path.GetSubstring(prefix2.GetLength(), path.GetLength() - prefix2.GetLength());
+    }
+    
+    // Также проверяем без слэша в конце
+    GS::UniString prefix1NoSlash = "Слои";
+    GS::UniString prefix2NoSlash = "Layers";
+    
+    if (path == prefix1NoSlash || path == prefix2NoSlash) {
+        return GS::UniString("");
+    }
+    
+    return path;
+}
+
+// ---------------- Удалить первый элемент "Слои" или "Layers" из массива пути ---------------- 
+static GS::Array<GS::UniString> RemoveRootFolderFromPath(const GS::Array<GS::UniString>& pathParts)
+{
+    GS::Array<GS::UniString> result;
+    
+    if (pathParts.GetSize() == 0) {
+        return result;
+    }
+    
+    // Проверяем первый элемент
+    GS::UniString firstPart = pathParts[0];
+    
+    // Если первый элемент - "Слои" или "Layers" (регистронезависимо), пропускаем его
+    if (firstPart == "Слои" || firstPart == "Layers" || firstPart == "layers" || firstPart == "LAYERS") {
+        // Копируем остальные элементы
+        for (UIndex i = 1; i < pathParts.GetSize(); ++i) {
+            result.Push(pathParts[i]);
+        }
+    } else {
+        // Копируем все элементы
+        result = pathParts;
+    }
+    
+    return result;
+}
+
+// ---------------- Разбить путь к папке на массив ---------------- 
 GS::Array<GS::UniString> ParseFolderPath(const GS::UniString& folderPath)
 {
     GS::Array<GS::UniString> pathParts;
@@ -46,8 +104,36 @@ bool CreateLayerFolder(const GS::UniString& folderPath, GS::Guid& folderGuid)
         return true; // Корневая папка уже существует
     }
 
-    GS::Array<GS::UniString> pathParts = ParseFolderPath(folderPath);
+    // Удаляем префикс "Слои/" или "Layers/" из пути
+    GS::UniString cleanFolderPath = RemoveRootFolderPrefix(folderPath);
+    
+    GS::Array<GS::UniString> pathParts = ParseFolderPath(cleanFolderPath);
     if (pathParts.IsEmpty()) {
+        folderGuid = GS::Guid();
+        return true;
+    }
+
+    // Удаляем первый элемент "Слои" или "Layers", если он есть
+    pathParts = RemoveRootFolderFromPath(pathParts);
+    if (pathParts.IsEmpty()) {
+        folderGuid = GS::Guid();
+        return true;
+    }
+
+    // Проверяем на пустые части пути и дубликаты
+    GS::Array<GS::UniString> cleanPathParts;
+    for (UIndex i = 0; i < pathParts.GetSize(); ++i) {
+        GS::UniString part = pathParts[i];
+        part.Trim();
+        if (!part.IsEmpty()) {
+            // Проверяем, нет ли дубликатов подряд
+            if (cleanPathParts.IsEmpty() || cleanPathParts[cleanPathParts.GetSize() - 1] != part) {
+                cleanPathParts.Push(part);
+            }
+        }
+    }
+
+    if (cleanPathParts.IsEmpty()) {
         folderGuid = GS::Guid();
         return true;
     }
@@ -55,8 +141,15 @@ bool CreateLayerFolder(const GS::UniString& folderPath, GS::Guid& folderGuid)
     // Создаем папки пошагово
     GS::Array<GS::UniString> currentPath;
     
-    for (UIndex i = 0; i < pathParts.GetSize(); ++i) {
-        currentPath.Push(pathParts[i]);
+    for (UIndex i = 0; i < cleanPathParts.GetSize(); ++i) {
+        currentPath.Push(cleanPathParts[i]);
+        
+        // Формируем строку пути для логирования
+        GS::UniString currentPathStr;
+        for (UIndex j = 0; j < currentPath.GetSize(); ++j) {
+            if (j > 0) currentPathStr += "/";
+            currentPathStr += currentPath[j];
+        }
         
         // Проверяем, существует ли папка
         API_AttributeFolder existingFolder = {};
@@ -74,13 +167,12 @@ bool CreateLayerFolder(const GS::UniString& folderPath, GS::Guid& folderGuid)
             if (err != NoError) {
 #ifdef DEBUG_UI_LOGS
                 ACAPI_WriteReport("[LayerHelper] Ошибка создания папки '%s' (код: %d)", true, 
-                    GS::UniString::Printf("%s", currentPath[0].ToCStr().Get()).ToCStr().Get(), err);
+                    currentPathStr.ToCStr().Get(), err);
 #endif
                 return false;
             }
 #ifdef DEBUG_UI_LOGS
-            ACAPI_WriteReport("[LayerHelper] Создана папка: %s", false, 
-                GS::UniString::Printf("%s", currentPath[0].ToCStr().Get()).ToCStr().Get());
+            ACAPI_WriteReport("[LayerHelper] Создана папка: %s", false, currentPathStr.ToCStr().Get());
 #endif
             
             // Используем GUID созданной папки
@@ -94,8 +186,7 @@ bool CreateLayerFolder(const GS::UniString& folderPath, GS::Guid& folderGuid)
             // Папка существует, используем её GUID
             folderGuid = existingFolder.guid;
 #ifdef DEBUG_UI_LOGS
-            ACAPI_WriteReport("[LayerHelper] Папка уже существует: %s", false, 
-                GS::UniString::Printf("%s", currentPath[0].ToCStr().Get()).ToCStr().Get());
+            ACAPI_WriteReport("[LayerHelper] Папка уже существует: %s", false, currentPathStr.ToCStr().Get());
 #endif
         }
     }
@@ -505,6 +596,114 @@ bool SetLayerVisibility(API_AttributeIndex layerIndex, bool hidden)
     ACAPI_WriteReport("[LayerHelper] Видимость слоя установлена: hidden=%s", false, hidden ? "true" : "false");
 #endif
     return true;
+}
+
+// ---------------- Рекурсивная функция для получения слоев из папки и её подпапок ---------------- 
+static void GetLayersFromFolderRecursive(
+    const GS::Array<GS::UniString>& folderPath,
+    GS::UniString currentPathStr,
+    GS::Array<LayerInfo>& layersList,
+    GS::Array<GS::UniString>& processedPaths)
+{
+    // Формируем строку пути для проверки циклов
+    if (currentPathStr.IsEmpty()) {
+        if (folderPath.GetSize() > 0) {
+            for (UIndex i = 0; i < folderPath.GetSize(); ++i) {
+                if (i > 0) currentPathStr += "/";
+                currentPathStr += folderPath[i];
+            }
+        } else {
+            currentPathStr = GS::UniString(""); // Корневая папка
+        }
+    }
+    
+    // Проверяем, не обрабатывали ли мы уже эту папку
+    for (UIndex i = 0; i < processedPaths.GetSize(); ++i) {
+        if (processedPaths[i] == currentPathStr)
+            return; // Уже обработана
+    }
+    processedPaths.Push(currentPathStr);
+    
+    // Получаем папку для использования в GetFolderContent
+    API_AttributeFolder folder = {};
+    folder.typeID = API_LayerID;
+    
+    // Для корневой папки не указываем path и guid - получаем корень
+    // Для остальных папок указываем path
+    if (folderPath.GetSize() > 0) {
+        folder.path = folderPath;
+        // Проверяем существование папки
+        if (ACAPI_Attribute_GetFolder(folder) != NoError)
+            return; // Папка не существует
+    }
+    
+    // Получаем содержимое папки
+    API_AttributeFolderContent folderContent = {};
+    GSErrCode err = ACAPI_Attribute_GetFolderContent(folder, folderContent);
+    
+    if (err != NoError) {
+        // Ошибка получения содержимого - пропускаем
+        return;
+    }
+    
+    // Обрабатываем атрибуты (слои) в этой папке
+    // attributeIds содержит массив GUID атрибутов (GS::Guid)
+    for (UIndex i = 0; i < folderContent.attributeIds.GetSize(); ++i) {
+        GS::Guid attrGuid = folderContent.attributeIds[i];
+        
+        // Конвертируем GS::Guid в API_Guid
+        API_Guid apiGuid = GSGuid2APIGuid(attrGuid);
+        
+        // Получаем атрибут по GUID
+        API_Attribute attr = {};
+        attr.header.typeID = API_LayerID;
+        attr.header.guid = apiGuid;
+        
+        // Получаем информацию об атрибуте через GUID
+        GSErrCode err = ACAPI_Attribute_Get(&attr);
+        if (err == NoError) {
+            LayerInfo info;
+            info.name = attr.header.name;
+            // Удаляем префикс "Слои/" или "Layers/" из пути папки
+            info.folder = RemoveRootFolderPrefix(currentPathStr);
+            layersList.Push(info);
+        }
+    }
+    
+    // Обрабатываем подпапки рекурсивно
+    // НЕ показываем корневую папку как отдельный элемент, только её содержимое
+    for (UIndex i = 0; i < folderContent.subFolders.GetSize(); ++i) {
+        const API_AttributeFolder& subfolder = folderContent.subFolders[i];
+        
+        // Формируем путь подпапки
+        GS::Array<GS::UniString> subfolderPath = subfolder.path;
+        GS::UniString subfolderPathStr;
+        for (UIndex j = 0; j < subfolderPath.GetSize(); ++j) {
+            if (j > 0) subfolderPathStr += "/";
+            subfolderPathStr += subfolderPath[j];
+        }
+        
+        // Удаляем префикс "Слои" или "Layers" из пути перед рекурсивным вызовом
+        GS::Array<GS::UniString> cleanedSubfolderPath = RemoveRootFolderFromPath(subfolderPath);
+        GS::UniString cleanedSubfolderPathStr = RemoveRootFolderPrefix(subfolderPathStr);
+        
+        // Рекурсивный вызов с очищенным путем
+        GetLayersFromFolderRecursive(cleanedSubfolderPath, cleanedSubfolderPathStr, layersList, processedPaths);
+    }
+}
+
+// ---------------- Получить список всех слоев с их папками ---------------- 
+GS::Array<LayerInfo> GetLayersList()
+{
+    GS::Array<LayerInfo> layersList;
+    GS::Array<GS::UniString> processedPaths;
+
+    // Начинаем с корневой папки (пустой путь)
+    // Корневая папка не показывается как отдельный элемент, только её содержимое
+    GS::Array<GS::UniString> rootPath;
+    GetLayersFromFolderRecursive(rootPath, GS::UniString(""), layersList, processedPaths);
+
+    return layersList;
 }
 
 } // namespace LayerHelper

@@ -39,6 +39,15 @@ namespace LayerHelper {
     // Скрыть/показать слой
     bool SetLayerVisibility(API_AttributeIndex layerIndex, bool hidden);
 
+    // Структура для информации о слое
+    struct LayerInfo {
+        GS::UniString name;      // Название слоя
+        GS::UniString folder;    // Путь к папке (пустая строка для корневых слоев)
+    };
+
+    // Получить список всех слоев с их папками
+    GS::Array<LayerInfo> GetLayersList();
+
 } // namespace LayerHelper
 
 #endif // LAYERHELPER_HPP

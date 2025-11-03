@@ -139,6 +139,15 @@ GS::Ref<JS::Base> ConvertToJavaScriptVariable(const SelectionHelper::ElementInfo
 	return js;
 }
 
+template<>
+GS::Ref<JS::Base> ConvertToJavaScriptVariable(const LayerHelper::LayerInfo& layerInfo)
+{
+	GS::Ref<JS::Array> js = new JS::Array();
+	js->AddItem(ConvertToJavaScriptVariable(layerInfo.name));
+	js->AddItem(ConvertToJavaScriptVariable(layerInfo.folder));
+	return js;
+}
+
 template<class Type>
 static GS::Ref<JS::Base> ConvertToJavaScriptVariable(const GS::Array<Type>& cppArray)
 {
@@ -351,6 +360,13 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		
 		const bool success = LayerHelper::CreateLayerAndMoveElements(params);
 		return ConvertToJavaScriptVariable(success);
+		}));
+
+	// --- Get Layers List API ---
+	jsACAPI->AddItem(new JS::Function("GetLayersList", [](GS::Ref<JS::Base>) {
+		if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] GetLayersList()");
+		const GS::Array<LayerHelper::LayerInfo> layers = LayerHelper::GetLayersList();
+		return ConvertToJavaScriptVariable(layers);
 		}));
 
 	// --- ΔZ API (двухшаговый буфер + совместимость со старым мостом) ---
