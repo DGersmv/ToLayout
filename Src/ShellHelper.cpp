@@ -1590,9 +1590,13 @@ bool CreateMorphFromContour(double widthMM, double stepMM, double thicknessMM,
 }
 
 // =============== Создание Mesh из контура ===============
-bool CreateMeshFromContour(double widthMM, double stepMM)
+bool CreateMeshFromContour(double widthMM, double stepMM, double offsetMM)
 {
-    Log("[ShellHelper] CreateMeshFromContour: START, width=%.1fmm, step=%.1fmm", widthMM, stepMM);
+    Log("[ShellHelper] CreateMeshFromContour: START, width=%.1fmm, step=%.1fmm, offset=%.1fmm", widthMM, stepMM, offsetMM);
+    
+    // Конвертируем offset из мм в метры
+    double offsetM = offsetMM / 1000.0;
+    Log("[ShellHelper] Offset converted: %.1fmm -> %.6fm", offsetMM, offsetM);
     
     // Проверяем, что базовая линия выбрана
     if (g_baseLineGuid == APINULLGuid) {
@@ -1744,16 +1748,16 @@ bool CreateMeshFromContour(double widthMM, double stepMM)
         double perpX = std::cos(tangentAngle + kPI / 2.0);
         double perpY = std::sin(tangentAngle + kPI / 2.0);
         
-        // Шаг 3: Создаем левую и правую точки
+        // Шаг 3: Создаем левую и правую точки с применением offset
         API_Coord3D leftPoint = {
             pointOnPath.x + perpX * halfWidth,
             pointOnPath.y + perpY * halfWidth,
-            baseZ
+            baseZ + offsetM  // Применяем offset к Z координате
         };
         API_Coord3D rightPoint = {
             pointOnPath.x - perpX * halfWidth,
             pointOnPath.y - perpY * halfWidth,
-            baseZ
+            baseZ + offsetM  // Применяем offset к Z координате
         };
         
         leftPoints.Push(leftPoint);
@@ -1772,23 +1776,21 @@ bool CreateMeshFromContour(double widthMM, double stepMM)
     Log("[ShellHelper] Creating Mesh from closed contour...");
     GS::Array<API_Coord3D> meshPoints;
     
-    // Добавляем левые точки от начала до конца (используем Z координаты из mesh, если доступны)
+    // Добавляем левые точки от начала до конца (Z уже включает offset)
     for (UIndex i = 0; i < leftPoints.GetSize(); ++i) {
-        double z = leftPoints[i].z;
+        double z = leftPoints[i].z;  // Z уже включает offset, примененный выше
         if (g_meshSurfaceGuid == APINULLGuid) {
-            z = 0.0; // Используем Z=0.0 если mesh не выбран (чтобы видно было на плане)
+            z = offsetM; // Используем только offset если mesh не выбран
         }
-        // Если mesh выбран, используем Z полученный от MeshIntersectionHelper
         meshPoints.Push({leftPoints[i].x, leftPoints[i].y, z});
     }
     
-    // Добавляем правые точки от конца до начала (в обратном порядке, используем Z из mesh)
+    // Добавляем правые точки от конца до начала (в обратном порядке, Z уже включает offset)
     for (Int32 i = rightPoints.GetSize() - 1; i >= 0; --i) {
-        double z = rightPoints[i].z;
+        double z = rightPoints[i].z;  // Z уже включает offset, примененный выше
         if (g_meshSurfaceGuid == APINULLGuid) {
-            z = 0.0; // Используем Z=0.0 если mesh не выбран (чтобы видно было на плане)
+            z = offsetM; // Используем только offset если mesh не выбран
         }
-        // Если mesh выбран, используем Z полученный от MeshIntersectionHelper
         meshPoints.Push({rightPoints[i].x, rightPoints[i].y, z});
     }
     

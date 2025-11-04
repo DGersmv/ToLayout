@@ -650,9 +650,10 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 	jsACAPI->AddItem(new JS::Function("CreateMeshFromContour", [](GS::Ref<JS::Base> param) {
 		if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] CreateMeshFromContour() - создание Mesh из контура");
 		
-		// Парсим параметры: принимаем строку "width:..,step:.."
+		// Парсим параметры: принимаем строку "width:..,step:..,offset:.."
 		double width = 1000.0; // мм по умолчанию
 		double step = 500.0;   // мм по умолчанию
+		double offset = 0.0;   // мм по умолчанию
 		
 		if (param != nullptr) {
 			if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
@@ -667,15 +668,19 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 					if (stepPtr != nullptr) {
 						std::sscanf(stepPtr + 5, "%lf", &step);
 					}
+					const char* offsetPtr = std::strstr(c, "offset:");
+					if (offsetPtr != nullptr) {
+						std::sscanf(offsetPtr + 7, "%lf", &offset);
+					}
 				}
 			}
 		}
 		
 		if (BrowserRepl::HasInstance()) {
-			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] CreateMeshFromContour parsed: width=%.1fmm, step=%.1fmm", width, step));
+			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] CreateMeshFromContour parsed: width=%.1fmm, step=%.1fmm, offset=%.1fmm", width, step, offset));
 		}
 		
-		bool success = ShellHelper::CreateMeshFromContour(width, step);
+		bool success = ShellHelper::CreateMeshFromContour(width, step, offset);
 		return new JS::Value(success);
 	}));
 	

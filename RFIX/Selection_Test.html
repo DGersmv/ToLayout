@@ -1309,6 +1309,7 @@
 
       const width = parseNumber(document.getElementById('meshWidth'), 1000);
       const step  = parseNumber(document.getElementById('meshStep'), 500);
+      const offset = parseNumber(document.getElementById('meshOffset'), 0);
       
       if (width <= 0) {
         setInfo("info-mesh-line", 'Width must be > 0');
@@ -1321,7 +1322,7 @@
 
       if (typeof A.CreateMeshFromContour === 'function') {
         try {
-          const params = "width:" + width + ",step:" + step;
+          const params = "width:" + width + ",step:" + step + ",offset:" + offset;
           const success = await A.CreateMeshFromContour(params);
           if (success) {
             AddLog('[Mesh] ✅ Mesh created successfully');
@@ -1671,6 +1672,11 @@
         <input type="number" id="meshStep" step="1" value="500">
       </div>
 
+      <div>
+        <label>Offset (mm):</label>
+        <input type="number" id="meshOffset" step="1" value="0">
+      </div>
+
       <div style="text-align:center; margin-top:15px;">
         <input type="button" 
                onclick="whenACAPIReadyDo(CreateMeshFromLineUI)" 
@@ -1685,7 +1691,7 @@
         2. Set Width and Step parameters<br>
         3. (Optional) Click "Set mesh" to select mesh surface for Z-coordinates<br>
         4. Click "Create Mesh from Line" - creates Mesh from closed contour<br><br>
-        <strong>Note:</strong> If mesh is not set, Mesh will be created at Z=0.0. If mesh is set, Mesh follows the terrain surface.
+        <strong>Note:</strong> If mesh is not set, Mesh will be created at Z=0.0 (or Z=offset if specified). If mesh is set, Mesh follows the terrain surface with offset applied to Z coordinates.
       </div>
     </fieldset>
 

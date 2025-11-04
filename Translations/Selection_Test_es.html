@@ -1309,6 +1309,7 @@
 
       const width = parseNumber(document.getElementById('meshWidth'), 1000);
       const step  = parseNumber(document.getElementById('meshStep'), 500);
+      const offset = parseNumber(document.getElementById('meshOffset'), 0);
       
       if (width <= 0) {
         setInfo("info-mesh-line", 'El ancho debe ser > 0');
@@ -1321,7 +1322,7 @@
 
       if (typeof A.CreateMeshFromContour === 'function') {
         try {
-          const params = "width:" + width + ",step:" + step;
+          const params = "width:" + width + ",step:" + step + ",offset:" + offset;
           const success = await A.CreateMeshFromContour(params);
           if (success) {
             AddLog('[Mesh] ✅ Mesh created successfully');
@@ -1671,6 +1672,11 @@
         <input type="number" id="meshStep" step="1" value="500">
       </div>
 
+      <div>
+        <label>Offset (mm):</label>
+        <input type="number" id="meshOffset" step="1" value="0">
+      </div>
+
       <div style="text-align:center; margin-top:15px;">
         <input type="button" 
                onclick="whenACAPIReadyDo(CreateMeshFromLineUI)" 
@@ -1685,7 +1691,7 @@
         2. Establezca parámetros Ancho y Paso<br>
         3. (Opcional) Haga clic en "Establecer malla" para seleccionar superficie de malla para coordenadas Z<br>
         4. Haga clic en "Crear malla desde línea" — crea Malla desde contorno cerrado<br><br>
-        <strong>Nota:</strong> Si la malla no está establecida, la Malla se creará en Z=0.0. Si la malla está establecida, la Malla sigue la superficie del terreno.
+        <strong>Nota:</strong> Si la malla no está establecida, la Malla se creará en Z=0.0 (o Z=offset si se especifica). Si la malla está establecida, la Malla sigue la superficie del terreno aplicando offset a las coordenadas Z.
       </div>
     </fieldset>
 
