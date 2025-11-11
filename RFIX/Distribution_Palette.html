@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Landscape Helper — Распределение</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      padding: 24px 28px;
+      border: 1px solid #d4d0c7;
+    }
+    h1 {
+      margin: 0 0 16px 0;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #4F604F;
+      text-align: center;
+    }
+    .button-primary {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 6px 8px;
+      border: none;
+      border-radius: 6px;
+      background: #366536;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: filter 0.15s ease, transform 0.15s ease;
+    }
+    .button-primary:hover {
+      filter: brightness(1.1);
+    }
+    .button-primary:active {
+      transform: translateY(1px);
+    }
+    .form-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 12px 0;
+      gap: 12px;
+    }
+    .form-row label {
+      flex: 1;
+      min-width: 140px;
+      text-align: right;
+      font-weight: 600;
+    }
+    .form-row input[type="number"] {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-row .button-inline {
+      flex: 0;
+      padding: 6px 16px;
+    }
+    #info-dist {
+      margin-top: 18px;
+      padding: 12px 14px;
+      background: #f9f9f9;
+      border: 1px dashed #aaa;
+      border-radius: 6px;
+      font-size: 13px;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: pre-wrap;
+    }
+    .section {
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+  <script>
+    function addLog(msg) {
+      if (window.DEBUG_DISTRIBUTION_PALETTE) {
+        console.log('[Distribution]', msg);
+      }
+    }
+
+    function setInfo(text) {
+      const box = document.getElementById('info-dist');
+      if (box) {
+        box.textContent = text;
+      }
+    }
+
+    function parseNumberFromInput(input, fallback) {
+      if (!input) {
+        return fallback;
+      }
+      const direct = typeof input.valueAsNumber === 'number' && !Number.isNaN(input.valueAsNumber)
+        ? input.valueAsNumber
+        : Number.NaN;
+      if (!Number.isNaN(direct)) {
+        return direct;
+      }
+      const parsed = parseFloat(String(input.value || '').replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function ensureACAPI(fnName) {
+      const api = window.ACAPI;
+      if (!api || typeof api[fnName] !== 'function') {
+        addLog('ACAPI.' + fnName + ' unavailable');
+        setInfo('❌ Функция недоступна. Обновите плагин.');
+        return null;
+      }
+      return api[fnName];
+    }
+
+    function setDistributionLine() {
+      const fn = ensureACAPI('SetDistributionLine');
+      if (!fn) {
+        return;
+      }
+      addLog('SetDistributionLine');
+      fn();
+      setInfo('Линия установлена. Выберите объект.');
+    }
+
+    function setDistributionObject() {
+      const fn = ensureACAPI('SetDistributionObject');
+      if (!fn) {
+        return;
+      }
+      addLog('SetDistributionObject');
+      fn();
+      setInfo('Объект установлен. Укажите шаг или количество.');
+    }
+
+    function setDistributionStep() {
+      const input = document.getElementById('distStep');
+      const rawValue = parseNumberFromInput(input, 0);
+      const step = Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 0;
+
+      const setter = ensureACAPI('SetDistributionStep');
+      if (setter) {
+        setter(step);
+      }
+
+      if (step <= 0) {
+        setInfo('Шаг должен быть > 0');
+        return;
+      }
+
+      const distribute = ensureACAPI('DistributeNow');
+      if (!distribute) {
+        return;
+      }
+
+      const payload = 'step:' + step;
+      addLog('DistributeNow with ' + payload);
+      const result = distribute(payload);
+      if (result && typeof result.then === 'function') {
+        result.then(success => {
+          setInfo(success ? '✅ Распределено по шагу' : '❌ Ошибка распределения');
+        }).catch(err => {
+          setInfo('❌ Ошибка: ' + err);
+        });
+      } else {
+        setInfo(result ? '✅ Распределено по шагу' : '❌ Ошибка распределения');
+      }
+    }
+
+    function setDistributionCount() {
+      const input = document.getElementById('distCount');
+      const rawValue = parseInt(String(input ? input.value : '0'), 10);
+      const count = Number.isFinite(rawValue) && rawValue > 0 ? rawValue : 0;
+
+      const setter = ensureACAPI('SetDistributionCount');
+      if (setter) {
+        setter(count);
+      }
+
+      if (count <= 0) {
+        setInfo('Количество должно быть ≥ 1');
+        return;
+      }
+
+      const distribute = ensureACAPI('DistributeNow');
+      if (!distribute) {
+        return;
+      }
+
+      const payload = 'count:' + count;
+      addLog('DistributeNow with ' + payload);
+      const result = distribute(payload);
+      if (result && typeof result.then === 'function') {
+        result.then(success => {
+          setInfo(success ? '✅ Распределено по количеству' : '❌ Ошибка распределения');
+        }).catch(err => {
+          setInfo('❌ Ошибка: ' + err);
+        });
+      } else {
+        setInfo(result ? '✅ Распределено по количеству' : '❌ Ошибка распределения');
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Распределение</h1>
+
+    <div class="section">
+      <button class="button-primary" onclick="setDistributionLine()">Установить линию</button>
+      <button class="button-primary" onclick="setDistributionObject()">Установить объект</button>
+    </div>
+
+    <div class="form-row">
+      <label for="distStep">Расстояние (мм):</label>
+      <input type="number" id="distStep" step="1" value="0">
+      <button class="button-primary button-inline" onclick="setDistributionStep()">ОК</button>
+    </div>
+
+    <div class="form-row">
+      <label for="distCount">Количество:</label>
+      <input type="number" id="distCount" step="1" value="1">
+      <button class="button-primary button-inline" onclick="setDistributionCount()">ОК</button>
+    </div>
+
+    <div id="info-dist">Подсказка: установите параметры распределения.</div>
+  </div>
+</body>
+</html>

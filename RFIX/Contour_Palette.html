@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Landscape Helper — Контуры</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      padding: 24px 30px;
+      border: 1px solid #d4d0c7;
+    }
+    h1 {
+      margin: 0 0 16px 0;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #4F604F;
+      text-align: center;
+    }
+    .button-primary {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 6px 8px;
+      border: none;
+      border-radius: 6px;
+      background: #366536;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: filter 0.15s ease, transform 0.15s ease;
+    }
+    .button-primary:hover {
+      filter: brightness(1.1);
+    }
+    .button-primary:active {
+      transform: translateY(1px);
+    }
+    .form-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 12px 0;
+      gap: 12px;
+    }
+    .form-row label {
+      flex: 1;
+      min-width: 160px;
+      text-align: right;
+      font-weight: 600;
+    }
+    .form-row input[type="number"] {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    #info-contours {
+      margin-top: 18px;
+      padding: 12px 14px;
+      background: #f9f9f9;
+      border: 1px dashed #aaa;
+      border-radius: 6px;
+      font-size: 13px;
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: pre-wrap;
+    }
+    .section {
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+  <script>
+    function addLog(msg) {
+      if (window.DEBUG_CONTOUR_PALETTE) {
+        console.log('[Contours]', msg);
+      }
+    }
+
+    function setInfo(text) {
+      const box = document.getElementById('info-contours');
+      if (box) {
+        box.textContent = text;
+      }
+    }
+
+    function ensureACAPI(fnName) {
+      const api = window.ACAPI;
+      if (!api || typeof api[fnName] !== 'function') {
+        addLog('ACAPI.' + fnName + ' unavailable');
+        setInfo('❌ Функция недоступна. Обновите плагин.');
+        return null;
+      }
+      return api[fnName].bind(api);
+    }
+
+    async function setContourMesh() {
+      const fn = ensureACAPI('SetMeshSurfaceForShell');
+      if (!fn) {
+        return;
+      }
+      setInfo('Выбор поверхности сетки...');
+      try {
+        const ok = await fn();
+        setInfo(ok ? '✅ Сетка установлена. Теперь задайте параметры.' : '❌ Не удалось установить сетку.');
+      } catch (err) {
+        setInfo('❌ Ошибка: ' + err);
+      }
+    }
+
+    async function selectBaseLine() {
+      const fn = ensureACAPI('SetBaseLineForShell');
+      if (!fn) {
+        return;
+      }
+      setInfo('Выбор базовой линии...');
+      try {
+        const ok = await fn();
+        setInfo(ok ? '✅ Линия выбрана. Задайте параметры и создайте контуры.' : '❌ Не удалось выбрать линию.');
+      } catch (err) {
+        setInfo('❌ Ошибка: ' + err);
+      }
+    }
+
+    async function createContours() {
+      const createFn = ensureACAPI('CreateShellFromLine');
+      if (!createFn) {
+        return;
+      }
+
+      const widthInput = document.getElementById('contourWidth');
+      const stepInput = document.getElementById('contourStep');
+      const width = parseFloat((widthInput?.value || '').replace(',', '.'));
+      const step = parseFloat((stepInput?.value || '').replace(',', '.'));
+
+      if (!Number.isFinite(width) || width <= 0) {
+        setInfo('❌ Укажите положительную ширину.');
+        widthInput?.focus();
+        return;
+      }
+      if (!Number.isFinite(step) || step <= 0) {
+        setInfo('❌ Укажите положительный шаг.');
+        stepInput?.focus();
+        return;
+      }
+
+      const payload = 'width:' + width + ',step:' + step;
+      addLog('CreateShellFromLine → ' + payload);
+      setInfo('Создание контуров...');
+      try {
+        const ok = await createFn(payload);
+        setInfo(ok ? '✅ Контуры созданы.' : '❌ Не удалось создать контуры.');
+      } catch (err) {
+        setInfo('❌ Ошибка: ' + err);
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Контуры</h1>
+
+    <div class="section">
+      <button class="button-primary" onclick="selectBaseLine()">Выбрать линию</button>
+      <button class="button-primary" onclick="setContourMesh()">Установить сетку</button>
+    </div>
+
+    <div class="form-row">
+      <label for="contourWidth">Ширина (мм):</label>
+      <input type="number" id="contourWidth" step="1" value="1000">
+    </div>
+
+    <div class="form-row">
+      <label for="contourStep">Шаг (мм):</label>
+      <input type="number" id="contourStep" step="1" value="500">
+    </div>
+
+    <div class="section">
+      <button class="button-primary" onclick="createContours()">Создать контуры</button>
+    </div>
+
+    <div id="info-contours">1. Выберите базовую линию. 2. (Опционально) Установите поверхность сетки. 3. Задайте ширину и шаг, затем создайте контуры.</div>
+  </div>
+</body>
+</html>
