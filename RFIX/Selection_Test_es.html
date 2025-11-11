@@ -462,7 +462,7 @@
       A.ChangeSelectedElementsID(baseID).then(function(success) {
         if (success) {
           AddLog('[UI] ✅ All selected element IDs successfully changed!');
-          setInfo("id-change-info", "✅ ¡ID cambiados! Ejemplos: " + baseID + "-01, " + baseID + "-02, " + baseID + "-03...");
+          setInfo("id-change-info", "✅ ID actualizados. Por ejemplo: " + baseID + "-01, " + baseID + "-02, " + baseID + "-03...");
           document.getElementById('baseID').value = '';
           setTimeout(UpdateSelectedElements, 1000);
         } else {
@@ -477,6 +477,8 @@
 
     // Храним полный список для фильтрации
     let allLayersData = [];
+    let expandedLayerFolders = new Set();
+    let currentLayersFilter = '';
     
     // Удалить префикс "Слои/" или "Layers/" из пути
     function removeRootFolderPrefix(path) {
@@ -519,14 +521,16 @@
 
           // Guardamos la lista completa para filtrar
           allLayersData = [];
+          expandedLayerFolders = new Set();
           
           // Convertimos array de arrays en array de objetos
           for (let i = 0; i < layersData.length; i++) {
             const item = layersData[i];
             if (Array.isArray(item) && item.length >= 2) {
+              const rawFolder = item[1] || '';
               allLayersData.push({
                 name: item[0] || '',
-                folder: item[1] || ''
+                folder: removeRootFolderPrefix(rawFolder)
               });
             }
           }
@@ -543,6 +547,7 @@
         listEl.innerHTML = '<option value="">Función GetLayersList aún no disponible</option>';
         AddLog('[UI] Función GetLayersList no disponible');
         allLayersData = [];
+        expandedLayerFolders = new Set();
       }
     }
 
@@ -550,134 +555,129 @@
       const listEl = document.getElementById('existingLayersList');
       if (!listEl) return;
 
+      currentLayersFilter = filterText || '';
       listEl.innerHTML = '';
       
-      if (allLayersData.length === 0) {
+      if (!allLayersData.length) {
         listEl.innerHTML = '<option value="">No se encontraron capas</option>';
         return;
       }
 
-      // Normalizamos el texto del filtro
-      const filter = filterText.trim().toLowerCase();
-      
-      // Agrupamos por carpetas
-      const folders = {};
+      const filter = currentLayersFilter.trim().toLowerCase();
+      const isFiltering = filter.length > 0;
+      const foldersTree = {};
       const rootLayers = [];
-      const folderSet = new Set(); // Para rastrear carpetas únicas
 
-      for (let i = 0; i < allLayersData.length; i++) {
-        const item = allLayersData[i];
-        const folderPath = item.folder || '';
+      allLayersData.forEach(item => {
         const layerName = item.name || '';
-        
-        // Verificamos si coincide con el filtro
-        const matchesFilter = !filter || 
-          folderPath.toLowerCase().startsWith(filter) || 
-          layerName.toLowerCase().startsWith(filter);
-        
-        if (!matchesFilter) continue;
-        
-        // Agregamos carpetas al conjunto
-        if (folderPath) {
-          const pathParts = folderPath.split('/').filter(p => p);
-          let currentPath = '';
-          for (let j = 0; j < pathParts.length; j++) {
-            currentPath = currentPath ? currentPath + '/' + pathParts[j] : pathParts[j];
-            if (!filter || currentPath.toLowerCase().startsWith(filter)) {
-              folderSet.add(currentPath);
-            }
+        const folderPath = item.folder || '';
+        const fullPath = (folderPath ? folderPath + '/' : '') + layerName;
+
+        if (!layerName) {
+          return;
+        }
+
+        if (
+          filter &&
+          !fullPath.toLowerCase().includes(filter) &&
+          !folderPath.toLowerCase().includes(filter)
+        ) {
+          return;
+        }
+
+        if (!folderPath) {
+          rootLayers.push({
+            name: layerName,
+            fullPath
+          });
+          return;
+        }
+
+        const pathParts = folderPath.split('/').filter(Boolean);
+        let node = foldersTree;
+
+        for (let i = 0; i < pathParts.length; i++) {
+          const part = pathParts[i];
+
+          if (!node[part]) {
+            node[part] = { _layers: [], _children: {} };
+          }
+
+          if (i === pathParts.length - 1) {
+            node[part]._layers.push({
+              name: layerName,
+              fullPath,
+              folderPath
+            });
+          } else {
+            node = node[part]._children;
           }
         }
-        
-        if (!folderPath || folderPath === '') {
-          rootLayers.push({ name: layerName, fullPath: layerName, isFolder: false });
-        } else {
-          const pathParts = folderPath.split('/').filter(p => p);
-          let current = folders;
-          
-          // Creamos estructura de carpetas
-          for (let j = 0; j < pathParts.length; j++) {
-            const part = pathParts[j];
-            if (!current[part]) {
-              current[part] = { _layers: [], _subfolders: {} };
-            }
-            if (j === pathParts.length - 1) {
-              // Última carpeta - agregamos capa
-              const fullPath = folderPath + '/' + layerName;
-              current[part]._layers.push({ name: layerName, fullPath: fullPath, folderPath: folderPath });
-            } else {
-              // Carpeta intermedia - vamos más profundo
-              current = current[part]._subfolders;
-            }
-          }
-        }
-      }
+      });
 
-      // Agregamos capas raíz
-      rootLayers.sort((a, b) => a.name.localeCompare(b.name));
-      for (let i = 0; i < rootLayers.length; i++) {
-        const opt = document.createElement('option');
-        opt.value = rootLayers[i].fullPath;
-        opt.textContent = '📄 ' + rootLayers[i].name;
-        opt.dataset.type = 'layer';
-        opt.dataset.folder = '';
-        opt.dataset.layer = rootLayers[i].name;
-        listEl.appendChild(opt);
-      }
+      const indentUnit = '\u00A0\u00A0';
 
-      // Agregamos carpetas y capas en ellas
-      function addFoldersToSelect(foldersObj, prefix = '') {
-        const folderNames = Object.keys(foldersObj).sort();
-        for (let i = 0; i < folderNames.length; i++) {
-          const folderName = folderNames[i];
-          if (folderName.startsWith('_')) continue;
+      const addFoldersToSelect = (tree, parentPath = '', depth = 0) => {
+        const folderNames = Object.keys(tree).sort((a, b) => a.localeCompare(b));
 
-          const folder = foldersObj[folderName];
-          const currentPath = prefix ? prefix + '/' + folderName : folderName;
+        folderNames.forEach(folderName => {
+          const folderNode = tree[folderName];
+          const currentPath = parentPath ? parentPath + '/' + folderName : folderName;
+          const hasSubfolders =
+            folderNode._children && Object.keys(folderNode._children).length > 0;
+          const hasLayers = folderNode._layers && folderNode._layers.length > 0;
+          const hasChildren = hasSubfolders || hasLayers;
+          const isExpanded = isFiltering || expandedLayerFolders.has(currentPath);
 
-          // Verificamos si la carpeta debe mostrarse (si hay filtro)
-          if (filter && !currentPath.toLowerCase().startsWith(filter) && 
-              (!folder._layers || folder._layers.length === 0)) {
-            // Saltamos la carpeta si no coincide con el filtro y no contiene capas
-            if (folder._subfolders && Object.keys(folder._subfolders).length > 0) {
-              // Pero continuamos recursivamente si hay subcarpetas
-              addFoldersToSelect(folder._subfolders, currentPath);
-            }
-            continue;
-          }
-
-          // Agregamos la carpeta
           const folderOpt = document.createElement('option');
           folderOpt.value = currentPath;
-          folderOpt.textContent = '📁 ' + currentPath;
-          folderOpt.style.fontWeight = 'bold';
           folderOpt.dataset.type = 'folder';
           folderOpt.dataset.folder = currentPath;
+          folderOpt.dataset.layer = '';
+          folderOpt.dataset.expanded = isExpanded ? '1' : '0';
+          const indicator = hasChildren ? (isExpanded ? '▾ ' : '▸ ') : '  ';
+          folderOpt.textContent =
+            indentUnit.repeat(depth) + indicator + '📁 ' + folderName;
           listEl.appendChild(folderOpt);
 
-          // Agregamos capas en la carpeta
-          if (folder._layers && folder._layers.length > 0) {
-            folder._layers.sort((a, b) => a.name.localeCompare(b.name));
-            for (let j = 0; j < folder._layers.length; j++) {
-              const layer = folder._layers[j];
-              const layerOpt = document.createElement('option');
-              layerOpt.value = layer.fullPath;
-              layerOpt.textContent = '  └─ 📄 ' + layer.name;
-              layerOpt.dataset.type = 'layer';
-              layerOpt.dataset.folder = layer.folderPath;
-              layerOpt.dataset.layer = layer.name;
-              listEl.appendChild(layerOpt);
-            }
+          if (hasSubfolders && isExpanded) {
+            addFoldersToSelect(folderNode._children, currentPath, depth + 1);
           }
 
-          // Recursivamente agregamos subcarpetas
-          if (folder._subfolders && Object.keys(folder._subfolders).length > 0) {
-            addFoldersToSelect(folder._subfolders, currentPath);
+          if (hasLayers && isExpanded) {
+            folderNode._layers
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .forEach(layer => {
+                const layerOpt = document.createElement('option');
+                layerOpt.value = layer.fullPath;
+                layerOpt.dataset.type = 'layer';
+                layerOpt.dataset.folder = layer.folderPath;
+                layerOpt.dataset.layer = layer.name;
+                layerOpt.textContent =
+                  indentUnit.repeat(depth + 1) + '📄 ' + layer.name;
+                listEl.appendChild(layerOpt);
+              });
           }
-        }
+        });
+      };
+
+      addFoldersToSelect(foldersTree);
+
+      if (rootLayers.length) {
+        rootLayers
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .forEach(layer => {
+            const opt = document.createElement('option');
+            opt.value = layer.fullPath;
+            opt.dataset.type = 'layer';
+            opt.dataset.folder = '';
+            opt.dataset.layer = layer.name;
+            opt.textContent = '📄 ' + layer.name;
+            listEl.appendChild(opt);
+          });
       }
-
-      addFoldersToSelect(folders);
 
       if (listEl.options.length === 0) {
         listEl.innerHTML = '<option value="">No se encontraron capas coincidentes</option>';
@@ -689,28 +689,60 @@
       if (!listEl || listEl.selectedIndex < 0) return;
 
       const selectedOption = listEl.options[listEl.selectedIndex];
-      if (!selectedOption || !selectedOption.value) return;
+      if (!selectedOption) return;
 
-      const optionType = selectedOption.dataset.type || '';
+      const optionType = selectedOption.dataset.type || 'layer';
       
       if (optionType === 'folder') {
-        // Es una carpeta
         const folderPath = selectedOption.dataset.folder || selectedOption.value;
-        // Eliminamos el prefijo "Слои/" o "Layers/" del camino
-        const cleanFolderPath = removeRootFolderPrefix(folderPath);
-        document.getElementById('layerFolder').value = cleanFolderPath;
+        document.getElementById('layerFolder').value = folderPath;
         document.getElementById('layerName').value = '';
-        AddLog('[UI] Carpeta seleccionada: ' + cleanFolderPath);
-      } else if (optionType === 'layer') {
-        // Es una capa
+        AddLog('[UI] Carpeta seleccionada: ' + folderPath);
+      } else {
         const folderPath = selectedOption.dataset.folder || '';
-        const layerName = selectedOption.dataset.layer || '';
-        
-        // Eliminamos el prefijo "Слои/" o "Layers/" del camino
-        const cleanFolderPath = removeRootFolderPrefix(folderPath);
-        document.getElementById('layerFolder').value = cleanFolderPath;
+        const layerName = selectedOption.dataset.layer || selectedOption.value;
+        document.getElementById('layerFolder').value = folderPath;
         document.getElementById('layerName').value = layerName;
-        AddLog('[UI] Capa seleccionada: ' + (cleanFolderPath ? cleanFolderPath + ' / ' : '') + layerName);
+        AddLog('[UI] Capa seleccionada: ' + (folderPath ? folderPath + ' / ' : '') + layerName);
+      }
+    }
+
+    function handleLayersListDoubleClick() {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl || listEl.selectedIndex < 0) return;
+
+      const selectedOption = listEl.options[listEl.selectedIndex];
+      if (!selectedOption) return;
+
+      const optionType = selectedOption.dataset.type || 'layer';
+
+      if (optionType === 'folder') {
+        const folderPath = selectedOption.dataset.folder || selectedOption.value || '';
+        if (expandedLayerFolders.has(folderPath)) {
+          expandedLayerFolders.delete(folderPath);
+          AddLog('[UI] Carpeta contraída: ' + folderPath);
+        } else {
+          expandedLayerFolders.add(folderPath);
+          AddLog('[UI] Carpeta expandida: ' + folderPath);
+        }
+
+        filterLayersList(currentLayersFilter);
+
+        const updatedList = document.getElementById('existingLayersList');
+        if (updatedList) {
+          for (let i = 0; i < updatedList.options.length; i++) {
+            const opt = updatedList.options[i];
+            if (
+              opt.dataset.type === 'folder' &&
+              (opt.dataset.folder || opt.value) === folderPath
+            ) {
+              updatedList.selectedIndex = i;
+              break;
+            }
+          }
+        }
+      } else {
+        selectFromList();
       }
     }
 
@@ -791,159 +823,11 @@
     function SetDistributionLine()     { if (ACAPI?.SetDistributionLine)     ACAPI.SetDistributionLine();     setInfo("info-dist","Línea establecida"); }
     function SetDistributionObject()   { if (ACAPI?.SetDistributionObject)   ACAPI.SetDistributionObject();   setInfo("info-dist","Objeto establecido"); }
     
-    // Column orientation functions
-    function SetColumnsForOrient() {
-      AddLog('[Columns] SetColumnsForOrient called');
-      if (ACAPI?.SetColumns) {
-        AddLog('[Columns] Calling ACAPI.SetColumns...');
-        ACAPI.SetColumns().then(function(success) {
-          AddLog('[Columns] SetColumns returned: ' + success);
-          if (success) {
-            setInfo("info-columns", "✅ Columnas establecidas");
-          } else {
-            // Попробуем установить балки, если колонны не найдены
-            AddLog('[Columns] No columns found, trying beams...');
-            if (ACAPI?.SetBeams) {
-              ACAPI.SetBeams().then(function(beamSuccess) {
-                AddLog('[Columns] SetBeams returned: ' + beamSuccess);
-                setInfo("info-columns", beamSuccess ? "✅ Vigas establecidas (detección automática)" : "❌ No se encontraron columnas o vigas. Por favor, seleccione columnas o vigas primero.");
-              });
-            } else {
-              setInfo("info-columns", "❌ No se encontraron columnas. Por favor, seleccione columnas primero.");
-            }
-          }
-        }).catch(function(err) {
-          AddLog('[Columns] SetColumns error: ' + err);
-          setInfo("info-columns", "❌ Error: " + err);
-        });
-      } else {
-        AddLog('[Columns] ACAPI.SetColumns unavailable');
-        setInfo("info-columns", "❌ Función no disponible");
-      }
-    }
-    function SetMeshForColumns() {
-      AddLog('[Columns] SetMeshForColumns called');
-      if (ACAPI?.SetMeshForColumns) {
-        AddLog('[Columns] Calling ACAPI.SetMeshForColumns...');
-        ACAPI.SetMeshForColumns().then(function(success) {
-          AddLog('[Columns] SetMeshForColumns returned: ' + success);
-          setInfo("info-columns", success ? "✅ Malla establecida" : "❌ Error al establecer malla");
-        }).catch(function(err) {
-          AddLog('[Columns] SetMeshForColumns error: ' + err);
-          setInfo("info-columns", "❌ Error: " + err);
-        });
-      } else {
-        AddLog('[Columns] ACAPI.SetMeshForColumns unavailable');
-        setInfo("info-columns", "❌ Función no disponible");
-      }
-    }
-    function OrientColumnsToSurface() {
-      AddLog('[Columns] OrientColumnsToSurface called');
-      if (ACAPI?.OrientColumnsToSurface) {
-        setInfo("info-columns", "Orientando a superficie...");
-        AddLog('[Columns] Calling ACAPI.OrientColumnsToSurface...');
-        ACAPI.OrientColumnsToSurface().then(function(success) {
-          AddLog('[Columns] OrientColumnsToSurface returned: ' + success);
-          if (success) {
-            setInfo("info-columns", "✅ Orientado a superficie");
-          } else {
-            // Попробуем ориентировать балки
-            AddLog('[Columns] Columns orientation failed, trying beams...');
-            if (ACAPI?.OrientBeamsToSurface) {
-              ACAPI.OrientBeamsToSurface().then(function(beamSuccess) {
-                AddLog('[Columns] OrientBeamsToSurface returned: ' + beamSuccess);
-                setInfo("info-columns", beamSuccess ? "✅ Vigas orientadas a superficie" : "❌ Error al orientar. Asegúrese de establecer elementos primero.");
-              });
-            } else {
-              setInfo("info-columns", "❌ Error al orientar. Asegúrese de establecer columnas/vigas primero.");
-            }
-          }
-        }).catch(function(err) {
-          AddLog('[Columns] OrientColumnsToSurface error: ' + err);
-          setInfo("info-columns", "❌ Error: " + err);
-        });
-      } else {
-        AddLog('[Columns] ACAPI.OrientColumnsToSurface unavailable');
-        setInfo("info-columns", "❌ Función no disponible");
-      }
-    }
-    function SetBeamsForOrient() {
-      AddLog('[Beams] SetBeamsForOrient called');
-      if (ACAPI?.SetBeams) {
-        AddLog('[Beams] Calling ACAPI.SetBeams...');
-        ACAPI.SetBeams().then(function(success) {
-          AddLog('[Beams] SetBeams returned: ' + success);
-          if (success) {
-            setInfo("info-beams", "✅ Vigas establecidas");
-          } else {
-            // Попробуем установить колонны, если балки не найдены
-            AddLog('[Beams] No beams found, trying columns...');
-            if (ACAPI?.SetColumns) {
-              ACAPI.SetColumns().then(function(colSuccess) {
-                AddLog('[Beams] SetColumns returned: ' + colSuccess);
-                setInfo("info-beams", colSuccess ? "✅ Columnas establecidas (detección automática)" : "❌ No se encontraron vigas o columnas. Por favor, seleccione vigas o columnas primero.");
-              });
-            } else {
-              setInfo("info-beams", "❌ No se encontraron vigas. Por favor, seleccione vigas primero.");
-            }
-          }
-        }).catch(function(err) {
-          AddLog('[Beams] SetBeams error: ' + err);
-          setInfo("info-beams", "❌ Error: " + err);
-        });
-      } else {
-        AddLog('[Beams] ACAPI.SetBeams unavailable');
-        setInfo("info-beams", "❌ Función no disponible");
-      }
-    }
-    function OrientBeamsToSurface() {
-      AddLog('[Beams] OrientBeamsToSurface called');
-      if (ACAPI?.OrientBeamsToSurface) {
-        setInfo("info-beams", "Orientando vigas a superficie...");
-        AddLog('[Beams] Calling ACAPI.OrientBeamsToSurface...');
-        ACAPI.OrientBeamsToSurface().then(function(success) {
-          AddLog('[Beams] OrientBeamsToSurface returned: ' + success);
-          setInfo("info-beams", success ? "✅ Vigas orientadas a superficie" : "❌ Error al orientar vigas");
-        }).catch(function(err) {
-          AddLog('[Beams] OrientBeamsToSurface error: ' + err);
-          setInfo("info-beams", "❌ Error: " + err);
-        });
-      } else {
-        AddLog('[Beams] ACAPI.OrientBeamsToSurface unavailable');
-        setInfo("info-beams", "❌ Función no disponible");
-      }
-    }
-    function RotateSelectedOrientation() {
-      AddLog('[Rotate] RotateSelectedOrientation called');
-      const angleInput = document.getElementById('rotateAngleInput');
-      if (!angleInput) {
-        AddLog('[Rotate] rotateAngleInput not found');
-        return;
-      }
-      const angleDeg = Number(angleInput.value) || 0;
-      AddLog('[Rotate] Angle from input: ' + angleDeg + ' degrees');
-      
-      if (ACAPI?.RotateSelectedOrientation) {
-        setInfo("info-rotate", "Rotando elementos seleccionados...");
-        AddLog('[Rotate] Calling ACAPI.RotateSelectedOrientation(' + angleDeg + ')...');
-        const result = ACAPI.RotateSelectedOrientation(angleDeg);
-        if (result && typeof result.then === 'function') {
-          result.then(function(success) {
-            AddLog('[Rotate] RotateSelectedOrientation returned: ' + success);
-            setInfo("info-rotate", success ? "✅ Rotado " + angleDeg + "°" : "❌ Error al rotar. Seleccione vigas primero.");
-          }).catch(function(err) {
-            AddLog('[Rotate] RotateSelectedOrientation error: ' + err);
-            setInfo("info-rotate", "❌ Error: " + err);
-          });
-        } else {
-          AddLog('[Rotate] RotateSelectedOrientation returned: ' + result);
-          setInfo("info-rotate", result ? "✅ Rotado " + angleDeg + "°" : "❌ Error al rotar. Seleccione vigas primero.");
-        }
-      } else {
-        AddLog('[Rotate] ACAPI.RotateSelectedOrientation unavailable');
-        setInfo("info-rotate", "❌ Función no disponible");
-      }
-    }
+    // Orientation palette shortcuts
+    function SetBeamsForOrient() { openAnglePalette(); }
+    function SetMeshForBeams() { openAnglePalette(); }
+    function OrientBeamsToSurface() { openAnglePalette(); }
+    function RotateSelectedOrientation() { openAnglePalette(); }
     function SetDistributionStep () {
       const s = parseNumber(document.getElementById('distStep'), 0);
       const step = (isFinite(s) && s > 0) ? s : 0;
@@ -966,283 +850,17 @@
     }
 
     // ================= SHELL / CONTOURS =================
-    async function SetMeshForContours() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      AddLog('[UI] Setting mesh for contours...');
-      setInfo("info-shell", "Estableciendo malla...");
-
-      if (typeof A.SetMeshSurfaceForShell === 'function') {
-        try {
-          const success = await A.SetMeshSurfaceForShell();
-          if (success) {
-            AddLog('[UI] ✅ Mesh set successfully');
-            setInfo("info-shell", "✅ Malla establecida correctamente");
-          } else {
-            AddLog('[UI] ❌ Failed to set mesh. Make sure a mesh is selected');
-            setInfo("info-shell", "❌ Error al establecer malla. Asegúrese de que una malla esté seleccionada");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling SetMeshSurfaceForShell: ' + err);
-          setInfo("info-shell", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function SetMeshSurfaceForShell is unavailable');
-        setInfo("info-shell", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
-
-    function SelectBaseLine() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[Shell] ACAPI unavailable'); return; }
-      if (!A.SetBaseLineForShell) {
-        AddLog('[Shell] API function SetBaseLineForShell is unavailable');
-        setInfo('info-shell', 'Función no disponible (actualice el complemento)');
-        return;
-      }
-
-      AddLog('[Shell] Selecting base line...');
-      setInfo('info-shell', 'Seleccione una línea base (spline/polilínea/arco/línea)...');
-
-      Promise.resolve(A.SetBaseLineForShell()).then(success => {
-        if (success) {
-          setInfo('info-shell', '✅ ¡Línea base seleccionada!');
-          AddLog('[Shell] Base line selected');
-        } else {
-          setInfo('info-shell', '❌ Error al seleccionar línea');
-          AddLog('[Shell] Line selection error');
-        }
-      }).catch(e => {
-        AddLog('[Shell] Error: ' + e);
-        setInfo('info-shell', '❌ Error: ' + e);
-      });
-    }
-
-    function CreateShellFromLine() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[Shell] ACAPI unavailable'); return; }
-      if (!A.CreateShellFromLine) {
-        AddLog('[Shell] API function is unavailable');
-        setInfo('info-shell', 'Función no disponible (actualice el complemento)');
-        return;
-      }
-
-      const width = parseNumber(document.getElementById('shellWidth'), 1000);
-      const step  = parseNumber(document.getElementById('shellStep'), 500);
-      
-      if (width <= 0) {
-        setInfo('info-shell', 'El ancho debe ser > 0');
-        return;
-      }
-      if (step <= 0) {
-        setInfo('info-shell', 'El paso debe ser > 0');
-        return;
-      }
-
-      AddLog('[Shell] Creating shell: width=' + width + ' mm, step=' + step + ' mm');
-      setInfo('info-shell', 'Creando carcasa...');
-
-      const params = "width:" + width + ",step:" + step;
-      AddLog('[Shell] Calling ACAPI.CreateShellFromLine with parameters: ' + params);
-      Promise.resolve(A.CreateShellFromLine(params)).then(success => {
-        if (success) {
-          setInfo('info-shell', '✅ ¡Carcasa creada!');
-          AddLog('[Shell] SUCCESS');
-        } else {
-          setInfo('info-shell', '❌ Error al crear carcasa');
-          AddLog('[Shell] FAILED');
-        }
-      }).catch(e => {
-        AddLog('[Shell] Error: ' + e);
-        setInfo('info-shell', '❌ Error: ' + e);
-      });
-    }
+    async function SetMeshForContours() { openContourPalette(); }
+    function SelectBaseLine() { openContourPalette(); }
+    function CreateShellFromLine() { openContourPalette(); }
+    async function CreateMeshUI() { openContourPalette(); }
 
     // ================= MARKUP/DIMENSIONS =================
-    async function SetMarkupStepUI() {
-      AddLog('[UI] SetMarkupStepUI called');
-      const A = window.ACAPI;
-      if (!A) {
-        AddLog('[UI] ACAPI unavailable');
-        return;
-      }
-
-      const stepInput = document.getElementById('markupStep');
-      const stepStr = stepInput.value;
-      const stepMm = parseFloat(stepStr);
-      
-      // Force conversion to number (diagnostics)
-      const stepMmNumber = Number(stepStr);
-      
-      if (isNaN(stepMm) || stepMm <= 0) {
-        AddLog('[UI] Invalid markup step value');
-        setInfo("info-markup", "❌ Valor de paso de marcado inválido");
-        return;
-      }
-
-      AddLog('[UI] Setting markup step: ' + stepMm + ' mm');
-      setInfo("info-markup", "Estableciendo paso de marcado...");
-
-      if (typeof A.SetMarkupStep === 'function') {
-        try {
-          const success = await A.SetMarkupStep(stepMmNumber.toString()); // avoid INTEGER coercion
-          if (success) {
-            g_lastMarkupStepMm = stepMmNumber;
-            AddLog('[UI] ✅ Markup step set: ' + stepMmNumber + ' mm');
-            setInfo("info-markup", "✅ Paso de marcado establecido: " + stepMmNumber + " mm");
-          } else {
-            AddLog('[UI] ❌ Error setting markup step');
-            setInfo("info-markup", "❌ Error al establecer paso de marcado");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling SetMarkupStep: ' + err);
-          setInfo("info-markup", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function SetMarkupStep is unavailable');
-        setInfo("info-markup", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
-
-    async function CreateMarkupUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      // Use the saved step (if user pressed "Set"), otherwise read from field
-      let stepMm = g_lastMarkupStepMm;
-      if (g_lastMarkupStepMm === 2500) {
-        const stepInput = document.getElementById('markupStep');
-        const fieldStepMm = parseFloat(stepInput.value);
-        if (!isNaN(fieldStepMm) && fieldStepMm > 0) {
-          stepMm = fieldStepMm;
-          AddLog('[UI] Using step from field: ' + stepMm + ' mm');
-        }
-      } else {
-        AddLog('[UI] Using previously set step: ' + stepMm + ' mm');
-      }
-      
-      // Ensure step set in backend
-      AddLog('[UI] Applying step: ' + stepMm + ' mm');
-      try {
-        const stepSuccess = await A.SetMarkupStep(stepMm.toString());
-        if (stepSuccess) {
-          g_lastMarkupStepMm = stepMm;
-          AddLog('[UI] ✅ Step applied: ' + stepMm + ' mm');
-        } else {
-          AddLog('[UI] ❌ Error applying step');
-          setInfo("info-markup", "❌ Error al aplicar paso");
-          return;
-        }
-      } catch (err) {
-        AddLog('[UI] ❌ Error applying step: ' + err);
-        setInfo("info-markup", "❌ Error applying step");
-        return;
-      }
-
-      AddLog('[UI] Creating markup');
-      setInfo("info-markup", "Creando marcado...");
-
-      if (typeof A.CreateMarkupDimensions === 'function') {
-        try {
-          const success = await A.CreateMarkupDimensions();
-          if (success) {
-            AddLog('[UI] ✅ Markup created successfully');
-            setInfo("info-markup", "✅ Marcado creado correctamente");
-          } else {
-            AddLog('[UI] ❌ Error creating markup');
-            setInfo("info-markup", "❌ Error al crear marcado");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling CreateMarkupDimensions: ' + err);
-          setInfo("info-markup", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function CreateMarkupDimensions is unavailable');
-        setInfo("info-markup", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
-
-    async function CreateDimensionsToLineUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      AddLog('[UI] Creating dimensions to line');
-      setInfo("info-markup", "Creando dimensiones a línea...");
-
-      if (typeof A.CreateDimensionsToLine === 'function') {
-        try {
-          const success = await A.CreateDimensionsToLine();
-          if (success) {
-            AddLog('[UI] ✅ Dimensions to line created successfully');
-            setInfo("info-markup", "✅ Dimensiones a línea creadas correctamente");
-          } else {
-            AddLog('[UI] ❌ Error creating dimensions to line');
-            setInfo("info-markup", "❌ Error al crear dimensiones a línea");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling CreateDimensionsToLine: ' + err);
-          setInfo("info-markup", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function CreateDimensionsToLine is unavailable');
-        setInfo("info-markup", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
-
-    async function CreateDimensionsBetweenUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      AddLog('[UI] Creating dimensions between objects');
-      setInfo("info-markup", "Creando dimensiones entre objetos...");
-
-      if (typeof A.CreateDimensionsBetweenObjects === 'function') {
-        try {
-          const success = await A.CreateDimensionsBetweenObjects();
-          if (success) {
-            AddLog('[UI] ✅ Dimensions between objects created successfully');
-            setInfo("info-markup", "✅ Dimensiones entre objetos creadas correctamente");
-          } else {
-            AddLog('[UI] ❌ Error creating dimensions between objects');
-            setInfo("info-markup", "❌ Error al crear dimensiones entre objetos");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling CreateDimensionsBetweenObjects: ' + err);
-          setInfo("info-markup", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function CreateDimensionsBetweenObjects is unavailable');
-        setInfo("info-markup", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
-
-    async function CreateDimensionsToPointUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      AddLog('[UI] Creating dimensions to point');
-      setInfo("info-markup", "Creando dimensiones a punto...");
-
-      if (typeof A.CreateDimensionsToPoint === 'function') {
-        try {
-          const success = await A.CreateDimensionsToPoint();
-          if (success) {
-            AddLog('[UI] ✅ Dimensions to point created successfully');
-            setInfo("info-markup", "✅ Dimensiones a punto creadas correctamente");
-          } else {
-            AddLog('[UI] ❌ Error creating dimensions to point');
-            setInfo("info-markup", "❌ Error al crear dimensiones a punto");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling CreateDimensionsToPoint: ' + err);
-          setInfo("info-markup", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function CreateDimensionsToPoint is unavailable');
-        setInfo("info-markup", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
+    async function SetMarkupStepUI() { openMarkupPalette(); }
+    async function CreateMarkupUI() { openMarkupPalette(); }
+    async function CreateDimensionsToLineUI() { openMarkupPalette(); }
+    async function CreateDimensionsBetweenUI() { openMarkupPalette(); }
+    async function CreateDimensionsToPointUI() { openMarkupPalette(); }
 
     // ================= GROUNDING / OFFSET =================
     async function SetGroundSurfaceUI() {
@@ -1380,145 +998,14 @@
     }
 
     // ================= MESH CREATION =================
-    async function CreateMeshUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[UI] ACAPI unavailable'); return; }
-
-      AddLog('[UI] Creating contours and morph');
-      setInfo("info-shell", "Creando contornos y morfo...");
-
-      const width = parseNumber(document.getElementById('shellWidth'), 1000);
-      const step  = parseNumber(document.getElementById('shellStep'), 500);
-      const thickness = parseNumber(document.getElementById('shellThickness'), 0);
-      
-      if (width <= 0) {
-        setInfo('info-shell', 'El ancho debe ser > 0');
-        return;
-      }
-      if (step <= 0) {
-        setInfo('info-shell', 'El paso debe ser > 0');
-        return;
-      }
-      if (thickness < 0) {
-        setInfo('info-shell', 'El grosor debe ser >= 0');
-        return;
-      }
-
-      if (typeof A.CreateMorphFromContour === 'function') {
-        try {
-          const params = "width:" + width + ",step:" + step + ",thickness:" + thickness;
-          const success = await A.CreateMorphFromContour(params);
-          if (success) {
-            AddLog('[UI] ✅ Contours and Morph created successfully');
-            setInfo("info-shell", "✅ Contornos y Morfo creados correctamente");
-          } else {
-            AddLog('[UI] ❌ Error creating contours and morph');
-            setInfo("info-shell", "❌ Error al crear contornos y morfo");
-          }
-        } catch (err) {
-          AddLog('[UI] ❌ Error calling CreateMorphFromContour: ' + err);
-          setInfo("info-shell", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[UI] ❌ Function CreateMorphFromContour is unavailable');
-        setInfo("info-shell", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
 
     // ================= MESH FROM LINE =================
-    function SelectBaseLineMesh() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[Mesh] ACAPI unavailable'); return; }
-      if (!A.SetBaseLineForShell) {
-        AddLog('[Mesh] API function SetBaseLineForShell is unavailable');
-        setInfo('info-mesh-line', 'Función no disponible (actualice el complemento)');
-        return;
-      }
 
-      AddLog('[Mesh] Selecting base line...');
-      setInfo('info-mesh-line', 'Seleccione una línea base (spline/polilínea/arco/línea)...');
+    function SelectBaseLineMesh() { openMeshPalette(); }
 
-      Promise.resolve(A.SetBaseLineForShell()).then(success => {
-        if (success) {
-          setInfo('info-mesh-line', '✅ ¡Línea base seleccionada!');
-          AddLog('[Mesh] Base line selected');
-        } else {
-          setInfo('info-mesh-line', '❌ Error al seleccionar línea');
-          AddLog('[Mesh] Line selection error');
-        }
-      }).catch(e => {
-        AddLog('[Mesh] Error: ' + e);
-        setInfo('info-mesh-line', '❌ Error: ' + e);
-      });
-    }
+    async function SetMeshForMesh() { openMeshPalette(); }
 
-    async function SetMeshForMesh() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[Mesh] ACAPI unavailable'); return; }
-
-      AddLog('[Mesh] Setting mesh for contours...');
-      setInfo("info-mesh-line", "Estableciendo malla...");
-
-      if (typeof A.SetMeshSurfaceForShell === 'function') {
-        try {
-          const success = await A.SetMeshSurfaceForShell();
-          if (success) {
-            AddLog('[Mesh] ✅ Mesh set successfully');
-            setInfo("info-mesh-line", "✅ Malla establecida correctamente");
-          } else {
-            AddLog('[Mesh] ❌ Failed to set mesh. Make sure a mesh is selected');
-            setInfo("info-mesh-line", "❌ Error al establecer malla. Asegúrese de que una malla esté seleccionada");
-          }
-        } catch (err) {
-          AddLog('[Mesh] ❌ Error calling SetMeshSurfaceForShell: ' + err);
-          setInfo("info-mesh-line", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[Mesh] ❌ Function SetMeshSurfaceForShell is unavailable');
-        setInfo("info-mesh-line", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
-
-    async function CreateMeshFromLineUI() {
-      const A = window.ACAPI;
-      if (!A) { AddLog('[Mesh] ACAPI unavailable'); return; }
-
-      AddLog('[Mesh] Creating mesh from line');
-      setInfo("info-mesh-line", "Creando malla desde línea...");
-
-      const width = parseNumber(document.getElementById('meshWidth'), 1000);
-      const step  = parseNumber(document.getElementById('meshStep'), 500);
-      const offset = parseNumber(document.getElementById('meshOffset'), 0);
-      
-      if (width <= 0) {
-        setInfo("info-mesh-line", 'El ancho debe ser > 0');
-        return;
-      }
-      if (step <= 0) {
-        setInfo("info-mesh-line", 'El paso debe ser > 0');
-        return;
-      }
-
-      if (typeof A.CreateMeshFromContour === 'function') {
-        try {
-          const params = "width:" + width + ",step:" + step + ",offset:" + offset;
-          const success = await A.CreateMeshFromContour(params);
-          if (success) {
-            AddLog('[Mesh] ✅ Mesh created successfully');
-            setInfo("info-mesh-line", "✅ Malla creada correctamente");
-          } else {
-            AddLog('[Mesh] ❌ Error creating mesh');
-            setInfo("info-mesh-line", "❌ Error al crear malla");
-          }
-        } catch (err) {
-          AddLog('[Mesh] ❌ Error calling CreateMeshFromContour: ' + err);
-          setInfo("info-mesh-line", "❌ Error: " + err);
-        }
-      } else {
-        AddLog('[Mesh] ❌ Function CreateMeshFromContour is unavailable');
-        setInfo("info-mesh-line", "❌ Función no disponible (actualice el complemento)");
-      }
-    }
+    async function CreateMeshFromLineUI() { openMeshPalette(); }
 
     function onShift(mm) {
       const m = parseFloat(mm) / 1000;
@@ -1556,9 +1043,6 @@
       // Enter handlers
       document.getElementById('distStep')    ?.addEventListener('keydown', e => { if (e.key === 'Enter') SetDistributionStep(); });
       document.getElementById('distCount')   ?.addEventListener('keydown', e => { if (e.key === 'Enter') SetDistributionCount(); });
-      document.getElementById('groundOffset')?.addEventListener('keydown', e => { if (e.key === 'Enter') whenACAPIReadyDo(ApplyZDeltaUI); });
-      document.getElementById('shellWidth')  ?.addEventListener('keydown', e => { if (e.key === 'Enter') CreateShellFromLine(); });
-      document.getElementById('shellStep')   ?.addEventListener('keydown', e => { if (e.key === 'Enter') CreateShellFromLine(); });
 
       // ID + Layers tab
       document.getElementById('baseID')      ?.addEventListener('keydown', e => { if (e.key === 'Enter') changeAllSelectedIDs(); });
@@ -1567,7 +1051,10 @@
       
       // Filtrado de lista de capas al escribir en el campo Layer Folder
       document.getElementById('layerFolder')?.addEventListener('input', function(e) {
-        const filterText = e.target.value.trim();
+        const filterText = e.target.value;
+        if (!filterText.trim()) {
+          expandedLayerFolders = new Set();
+        }
         if (allLayersData.length > 0) {
           filterLayersList(filterText);
         }
@@ -1608,6 +1095,55 @@
       const distribTab = document.querySelector('button[onclick*="tab-distrib"]');
       if (distribTab) distribTab.click();
     });
+
+    function openGroundPalette() {
+      if (ACAPI?.OpenGroundPalette) {
+        AddLog('[UI] OpenGroundPalette');
+        ACAPI.OpenGroundPalette();
+      } else {
+        AddLog('[UI] OpenGroundPalette unavailable');
+      }
+    }
+    function openMarkupPalette() {
+      if (ACAPI?.OpenMarkupPalette) {
+        AddLog('[UI] OpenMarkupPalette');
+        ACAPI.OpenMarkupPalette();
+      } else {
+        AddLog('[UI] OpenMarkupPalette unavailable');
+      }
+    }
+    function openAnglePalette() {
+      if (ACAPI?.OpenAnglePalette) {
+        AddLog('[UI] OpenAnglePalette');
+        ACAPI.OpenAnglePalette();
+      } else {
+        AddLog('[UI] OpenAnglePalette unavailable');
+      }
+    }
+    function openIdLayersPalette() {
+      if (ACAPI?.OpenIdLayersPalette) {
+        AddLog('[UI] OpenIdLayersPalette');
+        ACAPI.OpenIdLayersPalette();
+      } else {
+        AddLog('[UI] OpenIdLayersPalette unavailable');
+      }
+    }
+    function openMeshPalette() {
+      if (ACAPI?.OpenMeshPalette) {
+        AddLog('[UI] OpenMeshPalette');
+        ACAPI.OpenMeshPalette();
+      } else {
+        AddLog('[UI] OpenMeshPalette unavailable');
+      }
+    }
+    function openContourPalette() {
+      if (ACAPI?.OpenContourPalette) {
+        AddLog('[UI] OpenContourPalette');
+        ACAPI.OpenContourPalette();
+      } else {
+        AddLog('[UI] OpenContourPalette unavailable');
+      }
+    }
   </script>
 </head>
 
@@ -1640,17 +1176,11 @@
   </div>
 
   <!-- Tabs -->
-  <div class="tabs">
-    <button class="tablink" onclick="openTab(event,'tab-distrib')">Distribución</button>
-    <button class="tablink" onclick="openTab(event,'tab-orient')">Orientación</button>
-    <button class="tablink" onclick="openTab(event,'tab-ground')">Anclaje</button>
-    <button class="tablink" onclick="openTab(event,'tab-markup')">Marcado</button>
-    <button class="tablink" onclick="openTab(event,'tab-shell')">Contornos</button>
-    <button class="tablink" onclick="openTab(event,'tab-mesh')">Malla</button>
-    <button class="tablink" onclick="openTab(event,'tab-id')">ID</button>
-    <button class="tablink" onclick="openTab(event,'tab-layers')">Capas</button>
-    <button class="tablink" onclick="openTab(event,'tab-columns')">Ángulo</button>
-  </div>
+  
+  <div id="tab-markup" class="tabcontent"></div>
+  <div id="tab-shell" class="tabcontent"></div>
+  <div id="tab-id" class="tabcontent"></div>
+  <div id="tab-layers" class="tabcontent"></div>
 
   <!-- Distribution -->
   <div id="tab-distrib" class="tabcontent">
@@ -1729,241 +1259,14 @@
             data-help-title="Ayuda: Anclaje">Ayuda</button>
   </div>
 
-  <!-- Markup -->
-  <div id="tab-markup" class="tabcontent">
-    <fieldset class="control-block">
-      <legend>Dimensiones y marcado</legend>
-
-      <div style="text-align:center; margin-bottom:15px;">
-        <label>Paso de marcado (mm):</label>
-        <input type="number" id="markupStep" step="1" value="2500" min="1" placeholder="Ingrese paso en mm">
-        <input id="btnSetMarkupStep" type="button" onclick="whenACAPIReadyDo(SetMarkupStepUI)" value="Establecer">
-      </div>
-
-      <div style="text-align:center; margin-bottom:15px;">
-        <input id="btnCreateMarkup" type="button" onclick="whenACAPIReadyDo(CreateMarkupUI)" value="Crear marcado">
-      </div>
-
-      <div style="text-align:center; margin-bottom:15px;">
-        <input id="btnCreateDimensionsToLine" type="button" onclick="whenACAPIReadyDo(CreateDimensionsToLineUI)" value="Dimensiones a línea">
-      </div>
-
-      <div style="text-align:center; margin-bottom:15px;">
-        <input id="btnCreateDimensionsBetween" type="button" onclick="whenACAPIReadyDo(CreateDimensionsBetweenUI)" value="Dimensiones entre objetos">
-      </div>
-
-      <div style="text-align:center; margin-bottom:15px;">
-        <input id="btnCreateDimensionsToPoint" type="button" onclick="whenACAPIReadyDo(CreateDimensionsToPointUI)" value="Dimensiones a punto">
-      </div>
-
-      <div id="info-markup" class="info-box">
-        <strong>Instrucciones:</strong><br>
-        <strong>1. Crear marcado:</strong><br>
-        • Establezca el paso de marcado (ej., 1000 mm)<br>
-        • Haga clic en "Establecer" para aplicar el paso<br>
-        • Seleccione objetos para marcado (Losa, Malla, Carcasa, Muro) o líneas (Línea, Polilínea, Arco, Spline)<br>
-        • Haga clic en "Crear marcado"<br><br>
-        <strong>2. Dimensiones a línea:</strong><br>
-        • Seleccione objetos (Objeto/Columna/Lámpara)<br>
-        • Haga clic en "Dimensiones a línea"<br>
-        • Especifique dos puntos de línea<br><br>
-        <strong>3. Dimensiones entre objetos:</strong><br>
-        • Seleccione objetos (Objeto/Columna/Lámpara)<br>
-        • Haga clic en "Dimensiones entre objetos"<br><br>
-        <strong>4. Dimensiones a punto:</strong><br>
-        • Seleccione objetos (Objeto/Columna/Lámpara)<br>
-        • Haga clic en "Dimensiones a punto"<br>
-        • Especifique punto objetivo
-      </div>
-    </fieldset>
-
-    <button class="tab-help"
-            data-help-url="https://landscape.227.info/help/dimensions"
-            data-help-title="Ayuda: Marcado">Ayuda</button>
-  </div>
-
-  <!-- Contours -->
-  <div id="tab-shell" class="tabcontent">
-    <fieldset class="control-block">
-      <legend>Crear contornos desde línea</legend>
-
-      <div style="text-align:center; margin-bottom:10px;">
-        <input type="button" 
-               onclick="SelectBaseLine()" 
-               value="Seleccionar línea"
-               style="font-size:14px; padding:6px 15px; font-weight:bold;">
-      </div>
-
-      <div>
-        <label>Ancho (mm):</label>
-        <input type="number" id="shellWidth" step="1" value="1000">
-      </div>
-
-      <div>
-        <label>Paso (mm):</label>
-        <input type="number" id="shellStep" step="1" value="500">
-      </div>
-
-      <div style="text-align:center; margin-top:15px;">
-        <input type="button" 
-               onclick="CreateShellFromLine()" 
-               value="Crear contornos"
-               style="font-size:16px; padding:8px 20px; font-weight:bold;">
-      </div>
-
-      <div id="info-shell" class="info-box">
-        Crea líneas de contorno desde línea base con parámetros especificados.<br>
-        <strong>Para spline:</strong> coloca puntos con paso dado, construye perpendiculares<br>
-        <strong>Para otras líneas:</strong> verifica cierre, construye perpendiculares al inicio/fin<br>
-        Crea dos contornos laterales (Splines izquierdo/derecho) con líneas de cierre (para líneas abiertas).<br>
-        <strong>Atención:</strong> Primero seleccione línea base (spline/polilínea/arco/línea).<br><br>
-        <strong>Flujo de trabajo:</strong><br>
-        1. Haga clic en "Seleccionar línea" para seleccionar línea base<br>
-        2. Establezca parámetros Ancho y Paso<br>
-        3. Haga clic en "Crear contornos" — crea solo líneas de contorno (Splines izquierdo/derecho + líneas de cierre)
-      </div>
-    </fieldset>
-
-    <button class="tab-help"
-            data-help-url="https://landscape.227.info/help/shell"
-            data-help-title="Ayuda: Contornos">Ayuda</button>
-  </div>
-
-  <!-- Mesh -->
-  <div id="tab-mesh" class="tabcontent">
-    <fieldset class="control-block">
-      <legend>Crear malla desde línea</legend>
-
-      <div style="text-align:center; margin-bottom:10px;">
-        <input type="button" 
-               onclick="SelectBaseLineMesh()" 
-               value="Seleccionar línea"
-               style="font-size:14px; padding:6px 15px; font-weight:bold;">
-      </div>
-
-      <div style="text-align:center; margin-bottom:10px;">
-        <input type="button" 
-               onclick="SetMeshForMesh()" 
-               value="Establecer malla"
-               style="font-size:14px; padding:6px 15px; font-weight:bold;">
-      </div>
-
-      <div>
-        <label>Ancho (mm):</label>
-        <input type="number" id="meshWidth" step="1" value="1000">
-      </div>
-
-      <div>
-        <label>Paso (mm):</label>
-        <input type="number" id="meshStep" step="1" value="500">
-      </div>
-
-      <div>
-        <label>Offset (mm):</label>
-        <input type="number" id="meshOffset" step="1" value="0">
-      </div>
-
-      <div style="text-align:center; margin-top:15px;">
-        <input type="button" 
-               onclick="whenACAPIReadyDo(CreateMeshFromLineUI)" 
-               value="Crear malla desde línea"
-               style="font-size:16px; padding:8px 20px; font-weight:bold;">
-      </div>
-
-      <div id="info-mesh-line" class="info-box">
-        Crea elemento Malla desde línea base con parámetros especificados.<br>
-        <strong>Flujo de trabajo:</strong><br>
-        1. Haga clic en "Seleccionar línea" para seleccionar línea base (spline/polilínea/arco/línea)<br>
-        2. Establezca parámetros Ancho y Paso<br>
-        3. (Opcional) Haga clic en "Establecer malla" para seleccionar superficie de malla para coordenadas Z<br>
-        4. Haga clic en "Crear malla desde línea" — crea Malla desde contorno cerrado<br><br>
-        <strong>Nota:</strong> Si la malla no está establecida, la Malla se creará en Z=0.0 (o Z=offset si se especifica). Si la malla está establecida, la Malla sigue la superficie del terreno aplicando offset a las coordenadas Z.
-      </div>
-    </fieldset>
-
-    <button class="tab-help"
-            data-help-url="https://landscape.227.info/help/mesh"
-            data-help-title="Ayuda: Malla">Ayuda</button>
-  </div>
+  <!-- Mesh tab content movido a paleta separada -->
 
 
   <!-- ID -->
-  <div id="tab-id" class="tabcontent">
-    <fieldset class="control-block">
-      <legend>Establecer ID masivo para elementos seleccionados</legend>
-
-      <label for="baseID">Nombre base:</label>
-      <input type="text" id="baseID" placeholder="ej.: Pino común" style="width: 200px; padding: 3px; margin: 3px 0;" />
-      <br>
-      <input type="button" value="Establecer ID para elementos seleccionados" onclick="changeAllSelectedIDs()" style="margin-top: 10px;" />
-
-      <div class="info-box" id="id-change-info">
-        Ingrese nombre base y haga clic en el botón. Todos los elementos seleccionados obtendrán ID con número (ej.: Pino común-01, Pino común-02...)
-      </div>
-
-      <button class="tab-help"
-              data-help-url="https://landscape.227.info/help/selection"
-              data-help-title="Ayuda: Selección de elementos">Ayuda</button>
-    </fieldset>
-  </div>
+  <div id="tab-id" class="tabcontent"></div>
 
   <!-- Layers -->
-  <div id="tab-layers" class="tabcontent">
-    <fieldset class="control-block">
-      <legend>Crear carpeta/capa y mover elementos</legend>
-
-      <div style="display: flex; gap: 15px; align-items: flex-start; margin-bottom: 10px;">
-        <div style="flex: 1;">
-          <label style="display: block; margin-bottom: 5px;">Carpeta de capa:</label>
-          <input type="text" id="layerFolder" placeholder="ej.: Paisaje/Plantas" style="width: 100%; padding: 5px; margin-bottom: 5px;" />
-          <small style="color:#666; font-size:11px;">Separe subcarpetas con "/" (ej.: "Paisaje/Plantas/Árboles")</small>
-        </div>
-
-        <div style="flex: 1;">
-          <label style="display: block; margin-bottom: 5px;">Nueva capa:</label>
-          <input type="text" id="layerName" placeholder="ej.: Pinos comunes" style="width: 100%; padding: 5px;" />
-        </div>
-      </div>
-
-      <div style="margin-bottom: 15px;">
-        <label style="font-weight: bold; display: block; margin-bottom: 5px;">Carpetas y capas existentes:</label>
-        <select id="existingLayersList" 
-                size="8" 
-                style="width: 100%; padding: 5px; font-family: monospace; font-size: 12px; border: 1px solid #aaa; border-radius: 4px; background: #f9f9f9;"
-                onchange="selectFromList()"
-                ondblclick="selectFromList()">
-          <option value="">Cargando...</option>
-        </select>
-        <small style="color:#666; font-size:11px;">Seleccione o haga doble clic para usar carpeta/capa</small>
-      </div>
-
-      <div style="text-align:left; margin-top:10px;">
-        <input type="checkbox" id="hideLayer" style="margin-right:8px; cursor:pointer;" />
-        <label for="hideLayer" style="cursor:pointer; font-size:13px;">Ocultar capa creada</label>
-      </div>
-
-      <div style="text-align:center; margin-top:15px;">
-        <input type="button" 
-               onclick="createLayerAndMoveElements()" 
-               value="Crear y mover"
-               style="font-size:16px; padding:8px 20px; font-weight:bold; background:#4F604F; color:white; border:none; border-radius:4px; cursor:pointer;">
-      </div>
-
-      <div id="info-layers" class="info-box">
-        Qué sucederá:<br>
-        • Se creará la carpeta de capa (si no existe)<br>
-        • Se creará nueva capa en esta carpeta<br>
-        • Todos los elementos seleccionados se moverán a esta capa<br>
-        • Si está marcada "Ocultar capa creada", la capa se ocultará<br>
-        • Los ID de elementos permanecerán iguales (se pueden cambiar por separado)<br>
-        • Esto se puede deshacer con Ctrl+Z
-      </div>
-    </fieldset>
-
-    <button class="tab-help"
-            data-help-url="https://landscape.227.info/help/layers"
-            data-help-title="Ayuda: Capas e ID">Ayuda</button>
-  </div>
+  <div id="tab-layers" class="tabcontent"></div>
 
   <!-- Angle -->
   <div id="tab-columns" class="tabcontent">
@@ -1976,7 +1279,7 @@
                style="font-size:14px; padding:8px 20px; font-weight:bold; margin-bottom:10px;">
         <br>
         <input type="button" 
-               onclick="SetMeshForColumns()" 
+               onclick="SetMeshForBeams()" 
                value="Establecer malla"
                style="font-size:14px; padding:8px 20px; font-weight:bold; margin-bottom:10px;">
         <br>
@@ -2021,8 +1324,8 @@
     </fieldset>
 
     <button class="tab-help"
-            data-help-url="https://landscape.227.info/help/columns"
-            data-help-title="Ayuda: Orientación de columnas/vigas">Ayuda</button>
+            data-help-url="https://landscape.227.info/help/orientation?embed=1"
+            data-help-title="Ayuda: Orientación de vigas">Ayuda</button>
   </div>
 
 
@@ -2034,5 +1337,16 @@
      data-help-title="LandscapeHelper — sitio web">
     landscape.227.info
   </a>
+
+  <div class="palette-launchers">
+    <button class="palette-button" onclick="openDistributionPalette()">Distribución</button>
+    <button class="palette-button" onclick="openOrientationPalette()">Orientación</button>
+    <button class="palette-button" onclick="openAnglePalette()">Ángulo</button>
+    <button class="palette-button" onclick="openGroundPalette()">Anclaje</button>
+    <button class="palette-button" onclick="openMarkupPalette()">Marcado</button>
+    <button class="palette-button" onclick="openIdLayersPalette()">ID / Capas</button>
+    <button class="palette-button" onclick="openContourPalette()">Contornos</button>
+    <button class="palette-button" onclick="openMeshPalette()">Malla</button>
+  </div>
 </body>
 </html>

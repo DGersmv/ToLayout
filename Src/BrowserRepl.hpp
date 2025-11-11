@@ -29,6 +29,7 @@ public:
     static GSErrCode __ACENV_CALL PaletteControlCallBack(Int32 referenceID, API_PaletteMessageID messageID, GS::IntPtr param);
 
     static GSErrCode RegisterPaletteControlCallBack();
+    static void RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser);
 
     // --- Новый публичный метод для логов ---
     void LogToBrowser(const GS::UniString& msg);
@@ -37,7 +38,6 @@ private:
     static GS::Ref<BrowserRepl> instance;
     DG::Browser browser;   // приватный браузер
 
-    void RegisterACAPIJavaScriptObject();
     void SetMenuItemCheckedState(bool isChecked);
 
     // DG overrides

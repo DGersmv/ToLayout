@@ -33,3 +33,83 @@
 'DLGH'  32510  DLG_32510_Help_Browser {
 1   "Help Browser Control"     Browser_0
 }
+
+/* --- Dockable browser palette: DISTRIBUTION ---------------------------------------*/
+
+'GDLG'  32520    Palette | topCaption | close | grow   0   0  500  360  "Distribution"  {
+/* [  1] */ Browser         0   0  500  360
+}
+
+'DLGH'  32520  DLG_32520_Distribution_Browser {
+1   "Distribution Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: ORIENTATION ---------------------------------------*/
+
+'GDLG'  32530    Palette | topCaption | close | grow   0   0  500  360  "Orientation"  {
+/* [  1] */ Browser         0   0  500  360
+}
+
+'DLGH'  32530  DLG_32530_Orientation_Browser {
+1   "Orientation Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: GROUND ---------------------------------------*/
+
+'GDLG'  32540    Palette | topCaption | close | grow   0   0  520  380  "Grounding"  {
+/* [  1] */ Browser         0   0  520  380
+}
+
+'DLGH'  32540  DLG_32540_Ground_Browser {
+1   "Ground Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: MARKUP ---------------------------------------*/
+
+'GDLG'  32550    Palette | topCaption | close | grow   0   0  520  380  "Markup"  {
+/* [  1] */ Browser         0   0  520  380
+}
+
+'DLGH'  32550  DLG_32550_Markup_Browser {
+1   "Markup Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: CONTOURS ---------------------------------------*/
+
+'GDLG'  32560    Palette | topCaption | close | grow   0   0  520  380  "Contours"  {
+/* [  1] */ Browser         0   0  520  380
+}
+
+'DLGH'  32560  DLG_32560_Contour_Browser {
+1   "Contour Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: MESH ---------------------------------------*/
+
+'GDLG'  32570    Palette | topCaption | close | grow   0   0  520  380  "Mesh"  {
+/* [  1] */ Browser         0   0  520  380
+}
+
+'DLGH'  32570  DLG_32570_Mesh_Browser {
+1   "Mesh Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: ID & LAYERS ---------------------------------------*/
+
+'GDLG'  32580    Palette | topCaption | close | grow   0   0  520  380  "ID & Layers"  {
+/* [  1] */ Browser         0   0  520  380
+}
+
+'DLGH'  32580  DLG_32580_IdLayers_Browser {
+1   "IDLayers Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: ANGLE ---------------------------------------*/
+
+'GDLG'  32590    Palette | topCaption | close | grow   0   0  520  380  "Angle"  {
+/* [  1] */ Browser         0   0  520  380
+}
+
+'DLGH'  32590  DLG_32590_Angle_Browser {
+1   "Angle Browser Control"     Browser_0
+}

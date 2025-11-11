@@ -1,0 +1,22 @@
+^D:\API DEVELOPMENT KIT 27.6003\EXAMPLES\BROWSER_REPL_INT\BUILD\CMAKEFILES\C0BE33F0FB6CEF649F376C7FBF30E76E\ADDONRESOURCES.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E make_directory "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int/build/ResourceObjects"
+if %errorlevel% neq 0 goto :cmEnd
+python "D:/API Development Kit 27.6003/Support/Tools/CompileResources.py" INT "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int/../.." "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int/Src" "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int" "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int/build/ResourceObjects" "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int/build/ResourceObjects/Browser_Repl_Int.res"
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E touch "D:/API Development Kit 27.6003/Examples/Browser_Repl_Int/build/ResourceObjects/AddOnResources.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^D:\API DEVELOPMENT KIT 27.6003\EXAMPLES\BROWSER_REPL_INT\BUILD\CMAKEFILES\05F14252D91F16CAA97F9F0C4ED75D95\ADDONRESOURCES.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

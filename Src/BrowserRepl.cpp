@@ -15,6 +15,14 @@
 #include "ShellHelper.hpp"
 #include "HelpPalette.hpp"
 #include "LayerHelper.hpp"
+#include "DistributionPalette.hpp"
+#include "OrientationPalette.hpp"
+#include "GroundPalette.hpp"
+#include "MarkupPalette.hpp"
+#include "ContourPalette.hpp"
+#include "MeshPalette.hpp"
+#include "IdLayersPalette.hpp"
+#include "AnglePalette.hpp"
 #include "ColumnOrientHelper.hpp"
 
 
@@ -183,6 +191,27 @@ static GS::Ref<JS::Base> ConvertToJavaScriptVariable(const GS::Array<Type>& cppA
 // Буфер последнего ΔZ (м) — используется, если ApplyZDelta вызвали без аргумента
 static double g_lastZDeltaMeters = 0.0;
 
+static void EnsureModelWindowIsActive()
+{
+	API_WindowInfo windowInfo = {};
+	const GSErrCode getDbErr = ACAPI_Database_GetCurrentDatabase(&windowInfo);
+	if (DBERROR(getDbErr != NoError))
+		return;
+
+	// Не пытаемся активировать собственные кастомные окна
+	if (windowInfo.typeID == APIWind_MyDrawID || windowInfo.typeID == APIWind_MyTextID)
+		return;
+
+	const GSErrCode changeErr = ACAPI_Window_ChangeWindow(&windowInfo);
+#ifdef DEBUG_UI_LOGS
+	if (changeErr != NoError) {
+		ACAPI_WriteReport("[BrowserRepl] ACAPI_Window_ChangeWindow failed, err=%d", false, (int)changeErr);
+	}
+#else
+	(void)changeErr;
+#endif
+}
+
 // --------------------- Project event handler ---------------------
 static GSErrCode __ACENV_CALL NotificationHandler(API_NotifyEventID notifID, Int32 /*param*/)
 {
@@ -268,7 +297,7 @@ void BrowserRepl::InitBrowserControl()
 	ACAPI_WriteReport("[BrowserRepl] InitBrowserControl: loading HTML", false);
 #endif
 	browser.LoadHTML(LoadHtmlFromResource());
-	RegisterACAPIJavaScriptObject();
+	RegisterACAPIJavaScriptObject(browser);
 	// Страница сама дернёт UpdateSelectedElements() через whenACAPIReadyDo
 	LogToBrowser("[C++] BrowserRepl initialized");
 	
@@ -299,7 +328,7 @@ void BrowserRepl::LogToBrowser(const GS::UniString& msg)
 }
 
 // ------------------ JS API registration ---------------------
-void BrowserRepl::RegisterACAPIJavaScriptObject()
+void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 {
 #ifdef DEBUG_UI_LOGS
 	ACAPI_WriteReport("[BrowserRepl] RegisterACAPIJavaScriptObject", false);
@@ -363,6 +392,9 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		GS::Ref<JS::Object> jsResult = new JS::Object();
 		jsResult->AddItem("applied", ConvertToJavaScriptVariable((Int32)result.applied));
 		jsResult->AddItem("requested", ConvertToJavaScriptVariable((Int32)result.requested));
+
+		EnsureModelWindowIsActive();
+
 		return jsResult;
 		}));
 
@@ -607,6 +639,70 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		return new JS::Value(true);
 		}));
 
+	jsACAPI->AddItem(new JS::Function("OpenDistributionPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenDistributionPalette] request", false);
+#endif
+		DistributionPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenOrientationPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenOrientationPalette] request", false);
+#endif
+		OrientationPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenGroundPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenGroundPalette] request", false);
+#endif
+		GroundPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenMarkupPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenMarkupPalette] request", false);
+#endif
+		MarkupPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenIdLayersPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenIdLayersPalette] request", false);
+#endif
+		IdLayersPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenAnglePalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenAnglePalette] request", false);
+#endif
+		AnglePalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenMeshPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenMeshPalette] request", false);
+#endif
+		MeshPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenContourPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenContourPalette] request", false);
+#endif
+		ContourPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
 	jsACAPI->AddItem(new JS::Function("LogMessage", [](GS::Ref<JS::Base> param) {
 		if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			if (v->GetType() == JS::Value::STRING) {
@@ -802,8 +898,9 @@ void BrowserRepl::RegisterACAPIJavaScriptObject()
 		}));
 
 	// --- Register object in the browser ---
-	browser.RegisterAsynchJSObject(jsACAPI);
-	LogToBrowser("[C++] JS bridge registered");
+	targetBrowser.RegisterAsynchJSObject(jsACAPI);
+	if (BrowserRepl::HasInstance())
+		BrowserRepl::GetInstance().LogToBrowser("[C++] JS bridge registered");
 }
 
 // ------------------- Palette and Events ----------------------

@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Landscape Helper — ID / Слои</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      padding: 28px 32px;
+      border: 1px solid #d4d0c7;
+    }
+    h1 {
+      margin: 0 0 20px 0;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #4F604F;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 24px;
+      font-size: 18px;
+      text-transform: uppercase;
+      color: #4F604F;
+      border-bottom: 1px solid #d4d0c7;
+      padding-bottom: 6px;
+    }
+    label {
+      font-weight: 600;
+    }
+    .section {
+      margin-top: 18px;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 10px 0;
+    }
+    .control-row input[type="text"],
+    .control-row input[type="number"] {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .button-primary {
+      display: inline-block;
+      padding: 10px 22px;
+      margin: 6px 8px;
+      border: none;
+      border-radius: 6px;
+      background: #366536;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: filter 0.15s ease, transform 0.15s ease;
+    }
+    .button-primary:hover { filter: brightness(1.1); }
+    .button-primary:active { transform: translateY(1px); }
+    .info-box {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #f9f9f9;
+      border: 1px dashed #aaa;
+      border-radius: 6px;
+      font-size: 13px;
+      min-height: 40px;
+      white-space: pre-wrap;
+    }
+    .two-columns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+    .two-columns > div {
+      flex: 1 1 280px;
+    }
+    select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      min-height: 200px;
+      background: #fbfbfb;
+    }
+    .muted { color: #666; font-size: 12px; }
+  </style>
+  <script>
+    function addLog(msg) {
+      if (window.DEBUG_ID_LAYERS_PALETTE) {
+        console.log('[IdLayers]', msg);
+      }
+    }
+
+    function setInfo(id, text) {
+      const box = document.getElementById(id);
+      if (box) {
+        box.textContent = text;
+      }
+    }
+
+    function ensureACAPI(fnName) {
+      const api = window.ACAPI;
+      if (!api || typeof api[fnName] !== 'function') {
+        addLog('ACAPI.' + fnName + ' unavailable');
+        return null;
+      }
+      return api[fnName].bind(api);
+    }
+
+    function whenACAPIReadyDo(cb) {
+      if (typeof cb !== 'function') {
+        return;
+      }
+      if (window.ACAPI) {
+        cb();
+        return;
+      }
+      let tries = 0;
+      const iv = setInterval(() => {
+        if (window.ACAPI) {
+          clearInterval(iv);
+          cb();
+        } else if (++tries > 200) {
+          clearInterval(iv);
+          addLog('ACAPI not available (timeout)');
+        }
+      }, 50);
+    }
+
+    // =============== ID batch operations ===============
+    function changeAllSelectedIDs() {
+      const changeFn = ensureACAPI('ChangeSelectedElementsID');
+      if (!changeFn) {
+        setInfo('id-change-info', '❌ Функция недоступна. Обновите плагин.');
+        return;
+      }
+
+      const baseInput = document.getElementById('baseID');
+      const baseName = (baseInput?.value || '').trim();
+      if (!baseName) {
+        setInfo('id-change-info', 'Введите базовое имя для ID.');
+        baseInput?.focus();
+        return;
+      }
+
+      setInfo('id-change-info', 'Применение ID...');
+      addLog('ChangeSelectedElementsID → ' + baseName);
+
+      changeFn(baseName).then(success => {
+        if (success) {
+        setInfo('id-change-info', '✅ ID обновлены. Например: ' + baseName + '-01, ' + baseName + '-02...');
+          if (baseInput) baseInput.value = '';
+        } else {
+          setInfo('id-change-info', '❌ Не удалось обновить ID. Проверьте выделение.');
+        }
+      }).catch(err => {
+        setInfo('id-change-info', '❌ Ошибка: ' + err);
+      });
+    }
+
+    // =============== Layers helper ===============
+    let allLayersData = [];
+    let expandedLayerFolders = new Set();
+    let currentLayersFilter = '';
+
+    function removeRootFolderPrefix(path) {
+      if (!path) return '';
+      if (path.startsWith('Слои/')) return path.substring('Слои/'.length);
+      if (path.startsWith('Layers/')) return path.substring('Layers/'.length);
+      if (path === 'Слои' || path === 'Layers') return '';
+      return path;
+    }
+
+    function loadExistingLayersList(filterText = '') {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl) return;
+
+      const getLayers = ensureACAPI('GetLayersList');
+      if (!getLayers) {
+        listEl.innerHTML = '<option value="">Функция GetLayersList недоступна</option>';
+        return;
+      }
+
+      listEl.innerHTML = '<option value="">Загрузка...</option>';
+
+      getLayers()
+        .then(layersData => {
+          allLayersData = [];
+
+          if (!Array.isArray(layersData) || layersData.length === 0) {
+            listEl.innerHTML = '<option value="">Слои не найдены</option>';
+            return;
+          }
+
+          layersData.forEach(item => {
+            if (Array.isArray(item) && item.length >= 2) {
+              const rawFolder = item[1] || '';
+              allLayersData.push({
+                name: item[0] || '',
+                folder: removeRootFolderPrefix(rawFolder)
+              });
+            }
+          });
+
+          filterLayersList(filterText);
+        })
+        .catch(err => {
+          addLog('GetLayersList error: ' + err);
+          listEl.innerHTML = '<option value="">Ошибка загрузки слоев</option>';
+        });
+    }
+
+    function filterLayersList(filterText = '') {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl) return;
+
+      currentLayersFilter = filterText || '';
+      listEl.innerHTML = '';
+
+      if (!allLayersData.length) {
+        listEl.innerHTML = '<option value="">Слои не найдены</option>';
+        return;
+      }
+
+      const filter = currentLayersFilter.trim().toLowerCase();
+      const isFiltering = filter.length > 0;
+      const foldersTree = {};
+      const rootLayers = [];
+
+      allLayersData.forEach(item => {
+        const layerName = item.name || '';
+        const folderPath = item.folder || '';
+        const fullPath = (folderPath ? folderPath + '/' : '') + layerName;
+
+        if (!layerName) {
+          return;
+        }
+
+        if (
+          filter &&
+          !fullPath.toLowerCase().includes(filter) &&
+          !folderPath.toLowerCase().includes(filter)
+        ) {
+          return;
+        }
+
+        if (!folderPath) {
+          rootLayers.push({
+            name: layerName,
+            fullPath
+          });
+          return;
+        }
+
+        const pathParts = folderPath.split('/').filter(Boolean);
+        let node = foldersTree;
+
+        for (let i = 0; i < pathParts.length; i++) {
+          const part = pathParts[i];
+
+          if (!node[part]) {
+            node[part] = { _layers: [], _children: {} };
+          }
+
+          if (i === pathParts.length - 1) {
+            node[part]._layers.push({
+              name: layerName,
+              fullPath,
+              folderPath
+            });
+          } else {
+            node = node[part]._children;
+          }
+        }
+      });
+
+      const indentUnit = '\u00A0\u00A0';
+
+      const addFoldersToSelect = (tree, parentPath = '', depth = 0) => {
+        const folderNames = Object.keys(tree).sort((a, b) => a.localeCompare(b));
+
+        folderNames.forEach(folderName => {
+          const folderNode = tree[folderName];
+          const currentPath = parentPath ? parentPath + '/' + folderName : folderName;
+          const hasSubfolders =
+            folderNode._children && Object.keys(folderNode._children).length > 0;
+          const hasLayers = folderNode._layers && folderNode._layers.length > 0;
+          const hasChildren = hasSubfolders || hasLayers;
+          const isExpanded = isFiltering || expandedLayerFolders.has(currentPath);
+
+          const folderOpt = document.createElement('option');
+          folderOpt.value = currentPath;
+          folderOpt.dataset.type = 'folder';
+          folderOpt.dataset.folder = currentPath;
+          folderOpt.dataset.layer = '';
+          folderOpt.dataset.expanded = isExpanded ? '1' : '0';
+          const indicator = hasChildren ? (isExpanded ? '▾ ' : '▸ ') : '  ';
+          folderOpt.textContent =
+            indentUnit.repeat(depth) + indicator + '📁 ' + folderName;
+          listEl.appendChild(folderOpt);
+
+          if (hasSubfolders && isExpanded) {
+            addFoldersToSelect(folderNode._children, currentPath, depth + 1);
+          }
+
+          if (hasLayers && isExpanded) {
+            folderNode._layers
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .forEach(layer => {
+                const layerOpt = document.createElement('option');
+                layerOpt.value = layer.fullPath;
+                layerOpt.dataset.type = 'layer';
+                layerOpt.dataset.folder = layer.folderPath;
+                layerOpt.dataset.layer = layer.name;
+                layerOpt.textContent =
+                  indentUnit.repeat(depth + 1) + '📄 ' + layer.name;
+                listEl.appendChild(layerOpt);
+              });
+          }
+        });
+      };
+
+      addFoldersToSelect(foldersTree);
+
+      if (rootLayers.length) {
+        rootLayers.sort((a, b) => a.name.localeCompare(b.name));
+        rootLayers.forEach(layer => {
+          const opt = document.createElement('option');
+          opt.value = layer.fullPath;
+          opt.textContent = '📄 ' + layer.name;
+          opt.dataset.type = 'layer';
+          opt.dataset.folder = '';
+          opt.dataset.layer = layer.name;
+          listEl.appendChild(opt);
+        });
+      }
+
+      if (listEl.options.length === 0) {
+        listEl.innerHTML = '<option value="">Совпадений не найдено</option>';
+      }
+    }
+
+    function selectFromList() {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl || listEl.selectedIndex < 0) return;
+
+      const option = listEl.options[listEl.selectedIndex];
+      if (!option) return;
+
+      const optionType = option.dataset.type || 'layer';
+
+      if (optionType === 'folder') {
+        document.getElementById('layerFolder').value = option.dataset.folder || option.value;
+        document.getElementById('layerName').value = '';
+      } else {
+        document.getElementById('layerFolder').value = option.dataset.folder || '';
+        document.getElementById('layerName').value = option.dataset.layer || option.value;
+      }
+    }
+
+    function handleLayersListDoubleClick() {
+      const listEl = document.getElementById('existingLayersList');
+      if (!listEl || listEl.selectedIndex < 0) return;
+
+      const option = listEl.options[listEl.selectedIndex];
+      if (!option) return;
+
+      const optionType = option.dataset.type || 'layer';
+
+      if (optionType === 'folder') {
+        const folderPath = option.dataset.folder || option.value || '';
+        if (expandedLayerFolders.has(folderPath)) {
+          expandedLayerFolders.delete(folderPath);
+        } else {
+          expandedLayerFolders.add(folderPath);
+        }
+
+        filterLayersList(currentLayersFilter);
+
+        const updatedList = document.getElementById('existingLayersList');
+        if (updatedList) {
+          for (let i = 0; i < updatedList.options.length; i++) {
+            const opt = updatedList.options[i];
+            if (
+              opt.dataset.type === 'folder' &&
+              (opt.dataset.folder || opt.value) === folderPath
+            ) {
+              updatedList.selectedIndex = i;
+              break;
+            }
+          }
+        }
+      } else {
+        selectFromList();
+      }
+    }
+
+    function createLayerAndMoveElements() {
+      const layerFolder = document.getElementById('layerFolder')?.value.trim() || '';
+      const layerName = document.getElementById('layerName')?.value.trim();
+      const hideLayer = !!document.getElementById('hideLayer')?.checked;
+
+      if (!layerName) {
+        setInfo('info-layers', 'Введите название слоя.');
+        document.getElementById('layerName')?.focus();
+        return;
+      }
+
+      const normalizedFolder = removeRootFolderPrefix(layerFolder);
+      const paramsString = normalizedFolder + '|' + layerName + '|' + (hideLayer ? '1' : '0');
+      const fn = ensureACAPI('CreateLayerAndMoveElements');
+      if (!fn) {
+        setInfo('info-layers', '❌ Функция CreateLayerAndMoveElements недоступна.');
+        return;
+      }
+
+      setInfo('info-layers', 'Создание папки/слоя и перемещение элементов...');
+      addLog('CreateLayerAndMoveElements → ' + paramsString);
+
+      fn(paramsString).then(success => {
+        if (success) {
+          setInfo('info-layers', hideLayer
+            ? '✅ Слой создан, элементы перемещены и скрыты.'
+            : '✅ Слой создан и элементы перемещены.');
+          document.getElementById('layerName').value = '';
+          loadExistingLayersList(document.getElementById('layerFolder')?.value || '');
+        } else {
+          setInfo('info-layers', '❌ Не удалось создать слой или переместить элементы.');
+        }
+      }).catch(err => {
+        setInfo('info-layers', '❌ Ошибка: ' + err);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('baseID')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          changeAllSelectedIDs();
+        }
+      });
+
+      document.getElementById('layerFolder')?.addEventListener('input', e => {
+        if (!e.target.value.trim()) {
+          expandedLayerFolders = new Set();
+        }
+        filterLayersList(e.target.value);
+      });
+
+      whenACAPIReadyDo(() => loadExistingLayersList());
+    });
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>ID / Слои</h1>
+
+    <section class="section" id="section-id">
+      <h2>Массовое назначение ID</h2>
+      <div class="control-row">
+        <label for="baseID" style="min-width:140px;">Базовое имя:</label>
+        <input type="text" id="baseID" placeholder="например: Сосна обыкновенная">
+      </div>
+      <div>
+        <button class="button-primary" onclick="changeAllSelectedIDs()">Установить ID для выбранных</button>
+      </div>
+      <div id="id-change-info" class="info-box">
+        Введите базовое имя и нажмите кнопку. Все выбранные элементы получат ID с номером (например: Сосна-01, Сосна-02...).
+      </div>
+    </section>
+
+    <section class="section" id="section-layers">
+      <h2>Слои</h2>
+      <div class="two-columns">
+        <div>
+          <label style="display:block; margin-bottom:6px;" for="layerFolder">Папка слоя:</label>
+          <input type="text" id="layerFolder" placeholder="например: Ландшафт/Растения">
+          <p class="muted">Разделяйте подпапки символом "/" (например: "Ландшафт/Растения/Деревья").</p>
+
+          <label style="display:block; margin:12px 0 6px 0;" for="layerName">Новый слой:</label>
+          <input type="text" id="layerName" placeholder="например: Сосны обыкновенные">
+
+          <label style="display:block; margin:12px 0 6px 0;" for="hideLayer">
+            <input type="checkbox" id="hideLayer" style="margin-right:6px;">Скрыть созданный слой
+          </label>
+
+          <button class="button-primary" onclick="createLayerAndMoveElements()">Создать и переместить</button>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom:6px;">Существующие папки и слои:</label>
+          <select id="existingLayersList" size="12" onchange="selectFromList()" ondblclick="handleLayersListDoubleClick()">
+            <option value="">Загрузка...</option>
+          </select>
+          <p class="muted">Выберите или дважды щелкните элемент, чтобы заполнить поля.</p>
+        </div>
+      </div>
+      <div id="info-layers" class="info-box">
+        Создаст папку (если нет), создаст слой в ней, переместит выделенные элементы и при необходимости скроет слой.
+      </div>
+    </section>
+  </div>
+</body>
+</html>

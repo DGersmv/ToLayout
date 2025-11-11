@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>D:\API Development Kit 27.6003\Examples\Browser_Repl_Int\build\x64\Debug\AddOnResources</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>D:\API Development Kit 27.6003\Examples\Browser_Repl_Int\ToArchicad\Debug\Browser_Repl_Int.apx</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>D:\API Development Kit 27.6003\Examples\Browser_Repl_Int\build\x64\Debug\ALL_BUILD</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

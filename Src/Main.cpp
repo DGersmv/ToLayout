@@ -12,6 +12,14 @@
 #include	"ACAPinc.h"		// also includes APIdefs.h
 #include	"BrowserRepl.hpp"
 #include    "HelpPalette.hpp"  
+#include    "DistributionPalette.hpp"
+#include    "OrientationPalette.hpp"
+#include    "GroundPalette.hpp"
+#include    "MarkupPalette.hpp"
+#include    "ContourPalette.hpp"
+#include    "MeshPalette.hpp"
+#include    "IdLayersPalette.hpp"
+#include    "AnglePalette.hpp"
 
 // -----------------------------------------------------------------------------
 // Show or Hide Browser Palette
@@ -103,6 +111,14 @@ GSErrCode __ACENV_CALL Initialize ()
     GSErrCode palErr = NoError;
     palErr |= BrowserRepl::RegisterPaletteControlCallBack ();
     palErr |= HelpPalette::RegisterPaletteControlCallBack ();
+    palErr |= DistributionPalette::RegisterPaletteControlCallBack ();
+    palErr |= OrientationPalette::RegisterPaletteControlCallBack ();
+    palErr |= GroundPalette::RegisterPaletteControlCallBack ();
+    palErr |= MarkupPalette::RegisterPaletteControlCallBack ();
+    palErr |= ContourPalette::RegisterPaletteControlCallBack ();
+    palErr |= MeshPalette::RegisterPaletteControlCallBack ();
+    palErr |= IdLayersPalette::RegisterPaletteControlCallBack ();
+    palErr |= AnglePalette::RegisterPaletteControlCallBack ();
 
     if (DBERROR (palErr != NoError))
         return palErr;

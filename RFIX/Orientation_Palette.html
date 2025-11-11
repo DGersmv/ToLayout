@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Landscape Helper — Ориентация</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      padding: 24px 28px;
+      border: 1px solid #d4d0c7;
+    }
+    h1 {
+      margin: 0 0 16px 0;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #4F604F;
+      text-align: center;
+    }
+    .button-primary {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 6px 8px;
+      border: none;
+      border-radius: 6px;
+      background: #366536;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: filter 0.15s ease, transform 0.15s ease;
+    }
+    .button-primary:hover {
+      filter: brightness(1.1);
+    }
+    .button-primary:active {
+      transform: translateY(1px);
+    }
+    .form-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 12px 0;
+      gap: 12px;
+    }
+    .form-row label {
+      flex: 1;
+      min-width: 140px;
+      text-align: right;
+      font-weight: 600;
+    }
+    .form-row input[type="number"] {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    #info-orient {
+      margin-top: 18px;
+      padding: 12px 14px;
+      background: #f9f9f9;
+      border: 1px dashed #aaa;
+      border-radius: 6px;
+      font-size: 13px;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: pre-wrap;
+    }
+    .section {
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+  <script>
+    function addLog(msg) {
+      if (window.DEBUG_ORIENTATION_PALETTE) {
+        console.log('[Orientation]', msg);
+      }
+    }
+
+    function setInfo(text) {
+      const box = document.getElementById('info-orient');
+      if (box) {
+        box.textContent = text;
+      }
+    }
+
+    function ensureACAPI(fnName) {
+      const api = window.ACAPI;
+      if (!api || typeof api[fnName] !== 'function') {
+        addLog('ACAPI.' + fnName + ' unavailable');
+        setInfo('❌ Функция недоступна. Обновите плагин.');
+        return null;
+      }
+      return api[fnName];
+    }
+
+    function rotateSelection() {
+      const input = document.getElementById('rotateAngle');
+      const angle = input ? Number(input.value.replace(',', '.')) || 0 : 0;
+      const fn = ensureACAPI('RotateSelected');
+      if (!fn) {
+        return;
+      }
+      addLog('RotateSelected(' + angle + ')');
+      const result = fn(angle);
+      if (result && typeof result.then === 'function') {
+        result.then(success => {
+          setInfo(success ? '✅ Повернуто на ' + angle + '°' : '❌ Не удалось повернуть');
+        }).catch(err => {
+          setInfo('❌ Ошибка: ' + err);
+        });
+      } else {
+        setInfo(result ? '✅ Повернуто на ' + angle + '°' : '❌ Не удалось повернуть');
+      }
+    }
+
+    function alignSelectionX() {
+      const fn = ensureACAPI('AlignSelectedX');
+      if (!fn) {
+        return;
+      }
+      addLog('AlignSelectedX');
+      Promise.resolve(fn()).then(success => {
+        setInfo(success ? '✅ Выровнено по X' : '❌ Не удалось выровнять');
+      }).catch(err => setInfo('❌ Ошибка: ' + err));
+    }
+
+    function randomizeAngles() {
+      const fn = ensureACAPI('RandomizeSelectedAngles');
+      if (!fn) {
+        return;
+      }
+      addLog('RandomizeSelectedAngles');
+      Promise.resolve(fn()).then(success => {
+        setInfo(success ? '✅ Случайные углы применены' : '❌ Не удалось применить углы');
+      }).catch(err => setInfo('❌ Ошибка: ' + err));
+    }
+
+    function orientObjectsToPoint() {
+      const fn = ensureACAPI('OrientObjectsToPoint');
+      if (!fn) {
+        return;
+      }
+      addLog('OrientObjectsToPoint');
+      Promise.resolve(fn()).then(success => {
+        setInfo(success ? '✅ Ориентировано к точке' : '❌ Не удалось ориентировать');
+      }).catch(err => setInfo('❌ Ошибка: ' + err));
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Ориентация</h1>
+
+    <div class="form-row">
+      <label for="rotateAngle">Угол (°):</label>
+      <input type="number" id="rotateAngle" step="1" value="0">
+      <button class="button-primary" onclick="rotateSelection()">Повернуть</button>
+    </div>
+
+    <div class="section">
+      <button class="button-primary" onclick="alignSelectionX()">Выровнять по X</button>
+      <button class="button-primary" onclick="randomizeAngles()">Случайный угол</button>
+      <button class="button-primary" onclick="orientObjectsToPoint()">Ориентировать к точке</button>
+    </div>
+
+    <div id="info-orient">Подсказка: установите угол или выберите действие.</div>
+  </div>
+</body>
+</html>

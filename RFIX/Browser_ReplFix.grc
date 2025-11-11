@@ -12,3 +12,35 @@
 'DATA' 100 "Browser Control Html" {
 	"Selection_Test.html"
 }
+
+'DATA' 110 "Distribution Palette Html" {
+	"Distribution_Palette.html"
+}
+
+'DATA' 120 "Orientation Palette Html" {
+	"Orientation_Palette.html"
+}
+
+'DATA' 130 "Ground Palette Html" {
+	"Ground_Palette.html"
+}
+
+'DATA' 140 "Markup Palette Html" {
+	"Markup_Palette.html"
+}
+
+'DATA' 150 "Contour Palette Html" {
+	"Contour_Palette.html"
+}
+
+'DATA' 160 "Mesh Palette Html" {
+	"Mesh_Palette.html"
+}
+
+'DATA' 170 "IdLayers Palette Html" {
+	"IdLayers_Palette.html"
+}
+
+'DATA' 180 "Angle Palette Html" {
+	"Angle_Palette.html"
+}
