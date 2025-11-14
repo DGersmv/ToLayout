@@ -5,147 +5,192 @@
   <title>Landscape Helper</title>
 
   <style>
-    body { font-family: Arial, sans-serif; background:#f5f5f5; margin:20px; }
-    
-    /* LANDSCAPE HELPER Logo */
-    .logo-container { 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      margin: 0 auto 25px; 
-      padding: 20px 25px; 
-      background: linear-gradient(135deg, #f5f3ee 0%, #ebe8e0 100%);
-      border: 1px solid #d4d0c7;
-      border-radius: 12px; 
-      box-shadow: 0 6px 20px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
-      max-width: 650px;
-      position: relative;
-      overflow: hidden;
-    }
-    .logo-container::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-        radial-gradient(circle at 20% 20%, rgba(79, 96, 79, 0.03) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(110, 128, 110, 0.03) 0%, transparent 50%);
-      pointer-events: none;
-    }
-    .logo-icon { 
-      width: 70px; 
-      height: 70px; 
-      background: #4F604F;
-      border: 2px solid #4F604F;
-      border-radius: 12px;
-      position: relative;
-      margin-right: 20px;
-      overflow: hidden;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .logo-icon::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #6E806E 0%, #6E806E 45%, #4F604F 45%, #4F604F 100%);
-      border-radius: 10px;
-    }
-    .logo-icon::after {
-      content: '';
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      width: 16px;
-      height: 16px;
-      background: #6E806E;
-      border-radius: 50%;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .logo-icon .mountain {
-      position: absolute;
-      bottom: 8px;
-      right: 8px;
-      width: 0;
-      height: 0;
-      border-left: 12px solid transparent;
-      border-right: 12px solid transparent;
-      border-bottom: 18px solid #6E806E;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .logo-text { 
-      color: #4F604F; 
-      text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-      font-weight: 700;
-      text-align: left;
-      position: relative;
-      z-index: 1;
-    }
-    .logo-title { 
-      font-size: 28px; 
-      line-height: 1.0; 
-      margin: 0; 
-      letter-spacing: 1.2px;
+    body {
       font-family: 'Segoe UI', Arial, sans-serif;
+      background: #efefef;
+      margin: 0;
+      color: #2f2f2f;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 12px 0;
+    }
+    .palette {
+      width: 340px;
+      background: #efefef;
+      border: 1px solid #a6a3a0;
+      box-shadow: inset 0 0 0 1px #f8f8f8;
+      padding: 12px;
+      box-sizing: border-box;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0 0 10px;
       text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
-    .logo-subtitle { 
-      font-size: 13px; 
-      margin: 4px 0 0 0; 
-      letter-spacing: 0.8px;
-      opacity: 0.85;
-      font-weight: 500;
+    .section {
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 6px;
       text-transform: uppercase;
+      font-size: 11px;
+      color: #54524f;
     }
-    
-    .selection-table-container { position:relative; margin:0 auto 20px; width:80%; max-width:800px; background:#fff; }
-    table.selection-table { border-collapse:collapse; width:100%; background:#fff; }
-    table.selection-table th, table.selection-table td { border:1px solid #888; padding:6px 10px; text-align:center; }
-    table.selection-table thead { background:#f0f0f0; font-weight:bold; }
-    table.selection-table td:first-child, table.selection-table th:first-child { text-align:center; width:40px; }
-    table.selection-table td.count-cell { cursor:pointer; }
-    table.selection-table td.count-cell:hover { background-color:#f0f0f0; }
-    #selection-ok-btn { position:absolute; bottom:10px; right:10px; padding:8px 16px; border:0; border-radius:6px; background:#366536; color:#fff; font-weight:600; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.2); }
-    #selection-ok-btn:hover { filter:brightness(1.1); }
-    #selection-ok-btn:active { transform:translateY(1px); }
-    #selection-ok-btn:disabled { background:#ccc; cursor:not-allowed; opacity:0.6; }
-    .tabs { text-align:center; margin-bottom:10px; }
-    .tablink { display:inline-block; padding:8px 16px; margin:0 4px; border:0; border-radius:4px 4px 0 0; background:#ddd; cursor:pointer; font-size:14px; }
-    .tablink.active { background:#366536; color:#fff; }
-    .tabcontent { display:none; position:relative; }
-    fieldset.control-block { display:block; margin:15px auto; padding:15px; width:400px; max-width:95%; border:1px solid #aaa; border-radius:6px; background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.1); }
-    fieldset.control-block legend { font-weight:bold; }
-    fieldset.control-block label { display:inline-block; width:140px; text-align:right; margin-right:8px; }
-    fieldset.control-block input[type="number"] { width:120px; padding:3px; margin:3px 0; }
-    fieldset.control-block input[type="button"] { margin:4px 0; padding:4px 10px; cursor:pointer; }
-    .info-box { margin-top:10px; padding:6px; background:#f9f9f9; border:1px dashed #aaa; font-size:12px; min-height:30px; white-space:pre-wrap; }
-    a { display:block; text-align:center; margin-top:20px; color:#366536; font-weight:600; text-decoration:none; }
-    a:hover { filter:brightness(1.1); }
-    .palette-launchers { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; margin:0 auto 20px; }
-    .palette-button { padding:10px 24px; border:0; border-radius:8px; background:#366536; color:#fff; font-weight:600; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.2); transition:filter .15s ease, transform .15s ease; }
-    .palette-button:hover { filter:brightness(1.1); }
-    .palette-button:active { transform:translateY(1px); }
-    .tab-help { position:absolute; right:10px; bottom:10px; padding:8px 12px; border:0; border-radius:8px; background:#366536; color:#fff; font-weight:600; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.2); }
-    .tab-help:hover { filter:brightness(1.05); }
-    .tab-help:active { transform:translateY(1px); }
-
-    /* Black log strip */
-    #log-box { 
-      margin-top:10px; 
-      padding:8px; 
-      background:#111; 
-      color:#0f0; 
-      font-family:monospace; 
-      font-size:12px; 
-      height:140px; 
-      overflow:auto; 
-      display:none; /* Скрыто по умолчанию, будет показано в Debug версии через C++ код */
+    .divider {
+      height: 1px;
+      background: #c7c3bd;
+      margin: 10px 0;
     }
-    .muted { opacity:.6; }
+    .selection-table-container {
+      background: transparent;
+    }
+    table.selection-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      font-size: 11px;
+      box-shadow: inset 0 0 0 1px #d2cec9;
+    }
+    table.selection-table thead th {
+      text-align: left;
+      background: #dcd9d4;
+      border: 1px solid #b6b2ae;
+      padding: 4px 6px;
+      font-weight: 600;
+    }
+    table.selection-table tbody td {
+      border: 1px solid #c8c4c0;
+      padding: 4px 6px;
+    }
+    table.selection-table tbody tr:hover td {
+      background: #f3f1ee;
+    }
+    table.selection-table th:first-child,
+    table.selection-table td:first-child {
+      width: 32px;
+      text-align: center;
+    }
+    table.selection-table thead,
+    table.selection-table tbody {
+      display: block;
+    }
+    table.selection-table thead tr,
+    table.selection-table tbody tr {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+    table.selection-table tbody {
+      max-height: 160px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      border-left: 1px solid #c8c4c0;
+      border-right: 1px solid #c8c4c0;
+      border-bottom: 1px solid #c8c4c0;
+    }
+    table.selection-table td.count-cell {
+      cursor: pointer;
+    }
+    .button-flat {
+      display: inline-block;
+      padding: 4px 10px;
+      border: 1px solid #a8a5a2;
+      border-radius: 2px;
+      background: #dcd9d4;
+      color: #2f2f2f;
+      font-size: 12px;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 #f5f4f2;
+      min-width: 70px;
+      text-align: center;
+    }
+    .button-flat:hover {
+      background: #e7e4de;
+    }
+    .button-flat:active {
+      background: #cac7c2;
+    }
+    .button-flat:disabled {
+      background: #e2e0de;
+      color: #8a8a8a;
+      cursor: default;
+    }
+    .button-primary {
+      font-weight: 600;
+    }
+    .button-full {
+      width: 100%;
+    }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .info-box {
+      margin-top: 8px;
+      padding: 6px;
+      border: 1px solid #c0beb9;
+      background: #f9f8f6;
+      min-height: 32px;
+      font-size: 11px;
+      white-space: pre-wrap;
+    }
+    .launcher-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .link-minor {
+      display: block;
+      margin-top: 12px;
+      text-align: center;
+      color: #2f2f2f;
+      text-decoration: none;
+      font-size: 11px;
+    }
+    .link-minor:hover {
+      text-decoration: underline;
+    }
+    input[type="number"],
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 4px;
+      border: 1px solid #ada9a4;
+      border-radius: 2px;
+      background: #ffffff;
+      box-sizing: border-box;
+      font-size: 12px;
+    }
+    input[type="checkbox"] {
+      margin-right: 4px;
+    }
+    .help-button {
+      font-size: 11px;
+      padding: 4px 8px;
+      min-width: auto;
+    }
+    #selection-ok-btn {
+      margin-left: auto;
+    }
+    .log-box {
+      padding: 6px;
+      border: 1px solid #c0beb9;
+      background: #ffffff;
+      height: 70px;
+      overflow: auto;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      color: #353535;
+    }
   </style>
 
   <script type="text/javascript">
@@ -432,18 +477,18 @@
         if (result && typeof result === 'object') {
           const applied = result.applied || 0;
           const requested = result.requested || guidsArray.length;
-          AddLog('[UI] ✅ Выделение применено: ' + applied + ' из ' + requested + ' элементов');
-          setInfo("selection-info", "✅ Выделение применено: " + applied + " из " + requested + " элементов");
+          AddLog('[UI] Выделение применено: ' + applied + ' из ' + requested + ' элементов');
+          setInfo("selection-info", "Выделение применено: " + applied + " из " + requested + " элементов");
           
           // Опционально: обновляем таблицу после применения
           setTimeout(UpdateSelectedElements, 500);
         } else {
-          AddLog('[UI] ✅ Выделение применено');
+          AddLog('[UI] Выделение применено');
           setTimeout(UpdateSelectedElements, 500);
         }
       }).catch(function(err) {
-        AddLog('[UI] ❌ Ошибка применения выделения: ' + err);
-        setInfo("selection-info", "❌ Ошибка: " + err);
+        AddLog('[UI] Ошибка применения выделения: ' + err);
+        setInfo("selection-info", "Ошибка: " + err);
       });
     }
 
@@ -466,17 +511,17 @@
       
       A.ChangeSelectedElementsID(baseID).then(function(success) {
         if (success) {
-          AddLog('[UI] ✅ All selected element IDs successfully changed!');
-          setInfo("id-change-info", "✅ ID обновлены. Например: " + baseID + "-01, " + baseID + "-02, " + baseID + "-03...");
+          AddLog('[UI] All selected element IDs successfully changed!');
+          setInfo("id-change-info", "ID обновлены. Например: " + baseID + "-01, " + baseID + "-02, " + baseID + "-03...");
           document.getElementById('baseID').value = '';
           setTimeout(UpdateSelectedElements, 1000);
         } else {
-          AddLog('[UI] ❌ Error changing element IDs');
-          setInfo("id-change-info", "❌ Ошибка! Возможно, нет выбранных элементов или элемент не поддерживает изменение ID");
+          AddLog('[UI] Error changing element IDs');
+          setInfo("id-change-info", "Ошибка! Возможно, нет выбранных элементов или элемент не поддерживает изменение ID");
         }
       }).catch(function(err) {
-        AddLog('[UI] ❌ Error calling ChangeSelectedElementsID: ' + err);
-        setInfo("id-change-info", "❌ Ошибка: " + err);
+        AddLog('[UI] Error calling ChangeSelectedElementsID: ' + err);
+        setInfo("id-change-info", "Ошибка: " + err);
       });
     }
 
@@ -787,8 +832,8 @@
         A.CreateLayerAndMoveElements(params).then(function(success) {
           AddLog('[JS] CreateLayerAndMoveElements returned: ' + success);
           if (success) {
-            AddLog('[UI] ✅ Папка/слой созданы, элементы перемещены!');
-            setInfo("info-layers", "✅ Успешно! Папка: " + folderPath + ", Слой: " + layerName);
+            AddLog('[UI] Папка/слой созданы, элементы перемещены');
+            setInfo("info-layers", "Успешно. Папка: " + folderPath + ", слой: " + layerName);
             
             // Очищаем поля ввода
             document.getElementById('layerFolder').value  = '';
@@ -801,16 +846,16 @@
             
             setTimeout(UpdateSelectedElements, 1000);
           } else {
-            AddLog('[UI] ❌ Ошибка создания папки/слоя или перемещения элементов');
-            setInfo("info-layers", "❌ Ошибка! Проверьте введенные данные/выбор.");
+            AddLog('[UI] Ошибка создания папки/слоя или перемещения элементов');
+            setInfo("info-layers", "Ошибка. Проверьте введенные данные и текущий выбор.");
           }
         }).catch(function(err) {
-          AddLog('[UI] ❌ Ошибка вызова CreateLayerAndMoveElements: ' + err);
-          setInfo("info-layers", "❌ Ошибка: " + err);
+          AddLog('[UI] Ошибка вызова CreateLayerAndMoveElements: ' + err);
+          setInfo("info-layers", "Ошибка: " + err);
         });
       } else {
-        AddLog('[UI] ❌ Функция CreateLayerAndMoveElements недоступна');
-        setInfo("info-layers", "❌ Функция недоступна (обновите плагин)");
+        AddLog('[UI] Функция CreateLayerAndMoveElements недоступна');
+        setInfo("info-layers", "Функция недоступна (обновите плагин)");
       }
     }
 
@@ -1011,41 +1056,65 @@
 </head>
 
 <body>
-  <!-- Selection Table -->
-  <div class="selection-table-container">
-    <table class="selection-table">
-      <thead>
-        <tr><th colspan="5">Выбранные элементы:</th></tr>
-        <tr>
-          <th><input type="checkbox" id="select-all-checkbox" title="Выбрать/снять всё" onchange="handleSelectAllCheckboxChange()"></th>
-          <th>Тип</th><th>ID</th><th>Слой</th><th>Количество</th>
-        </tr>
-      </thead>
-      <tbody id="selection"><tr><td colspan="5">Нет выбранных элементов</td></tr></tbody>
-    </table>
-    <button id="selection-ok-btn" onclick="applyCheckedSelection()">OK</button>
-    <div id="selection-info" class="info-box" style="margin-top:10px; padding:6px; background:#f9f9f9; border:1px dashed #aaa; font-size:12px; min-height:30px; white-space:pre-wrap;">Отметьте группы чекбоксами и нажмите OK, чтобы оставить в выделении только выбранные группы.</div>
+<div class="palette">
+  <h1>Выбор элементов</h1>
+
+  <div class="section">
+    <div class="section-title">Текущий набор</div>
+    <div class="selection-table-container">
+      <table class="selection-table">
+        <thead>
+          <tr>
+            <th colspan="5">Выбранные элементы</th>
+          </tr>
+          <tr>
+            <th><input type="checkbox" id="select-all-checkbox" title="Выбрать/снять всё" onchange="handleSelectAllCheckboxChange()"></th>
+            <th>Тип</th>
+            <th>ID</th>
+            <th>Слой</th>
+            <th>Кол-во</th>
+          </tr>
+        </thead>
+        <tbody id="selection"><tr><td colspan="5">Нет выбранных элементов</td></tr></tbody>
+      </table>
+      <div id="selection-info" class="info-box">Отметьте группы чекбоксами и нажмите OK, чтобы оставить в выделении только выбранные группы.</div>
+      <div class="controls-row">
+        <button class="button-flat help-button" data-help-url="https://landscape.227.info/help/selection">Справка</button>
+        <button id="selection-ok-btn" class="button-flat button-primary" onclick="applyCheckedSelection()">OK</button>
+      </div>
+    </div>
   </div>
 
-  <div class="palette-launchers">
-    <button class="palette-button" onclick="openDistributionPalette()">Распределение</button>
-    <button class="palette-button" onclick="openOrientationPalette()">Ориентация</button>
-    <button class="palette-button" onclick="openAnglePalette()">Угол</button>
-    <button class="palette-button" onclick="openGroundPalette()">Привязка</button>
-    <button class="palette-button" onclick="openMarkupPalette()">Разметка</button>
-    <button class="palette-button" onclick="openIdLayersPalette()">ID / Слои</button>
-    <button class="palette-button" onclick="openContourPalette()">Контуры</button>
-    <button class="palette-button" onclick="openMeshPalette()">Сетка</button>
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-title">Инструменты</div>
+    <div class="launcher-list">
+      <button class="button-flat button-full" onclick="openDistributionPalette()">Распределение</button>
+      <button class="button-flat button-full" onclick="openOrientationPalette()">Ориентация</button>
+      <button class="button-flat button-full" onclick="openAnglePalette()">Угол</button>
+      <button class="button-flat button-full" onclick="openGroundPalette()">Привязка</button>
+      <button class="button-flat button-full" onclick="openMarkupPalette()">Разметка</button>
+      <button class="button-flat button-full" onclick="openIdLayersPalette()">ID / Слои</button>
+      <button class="button-flat button-full" onclick="openContourPalette()">Контуры</button>
+      <button class="button-flat button-full" onclick="openMeshPalette()">Сетка</button>
+    </div>
   </div>
 
-  <!-- Black log strip -->
-  <div id="log-box">[Здесь будет журнал плагина]</div>
+  <div class="divider"></div>
 
-  <a href="#"
-     data-help-url="https://landscape.227.info/?embed=1"
-     data-help-title="LandscapeHelper — сайт">
-    LANDSCAPE HELPER
-  </a>
+    <div class="section">
+    <div id="log-box" class="log-box">[Здесь будет журнал плагина]</div>
+  </div>
+
+  <div class="link-minor">
+    <a href="#"
+       data-help-url="https://landscape.227.info/payment"
+       data-help-title="Landscape Helper — поддержка проекта">
+      Landscape Helper
+    </a>
+  </div>
+</div>
 </body>
 </html>
 

@@ -170,3 +170,6 @@ void GroundPalette::PanelCloseRequested(const DG::PanelCloseRequestEvent&, bool*
 	if (accepted != nullptr)
 		*accepted = true;
 }
+
+
+

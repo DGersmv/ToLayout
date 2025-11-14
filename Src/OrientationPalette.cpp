@@ -170,3 +170,6 @@ void OrientationPalette::PanelCloseRequested(const DG::PanelCloseRequestEvent&, 
 	if (accepted != nullptr)
 		*accepted = true;
 }
+
+
+

@@ -5,100 +5,122 @@
   <title>Landscape Helper — ID / Слои</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      margin: 20px;
-      color: #333;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #efefef;
+      margin: 0;
+      color: #2f2f2f;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 12px 0;
     }
-    .container {
-      max-width: 640px;
-      margin: 0 auto;
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-      padding: 28px 32px;
-      border: 1px solid #d4d0c7;
+    .palette {
+      width: 360px;
+      background: #efefef;
+      border: 1px solid #a6a3a0;
+      box-shadow: inset 0 0 0 1px #f8f8f8;
+      padding: 12px;
+      box-sizing: border-box;
+      font-size: 12px;
+      line-height: 1.35;
     }
     h1 {
-      margin: 0 0 20px 0;
-      font-size: 22px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #4F604F;
-      text-align: center;
-    }
-    h2 {
-      margin-top: 24px;
-      font-size: 18px;
-      text-transform: uppercase;
-      color: #4F604F;
-      border-bottom: 1px solid #d4d0c7;
-      padding-bottom: 6px;
-    }
-    label {
+      font-size: 13px;
       font-weight: 600;
+      margin: 0 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
     .section {
-      margin-top: 18px;
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      font-size: 11px;
+      color: #54524f;
+    }
+    .divider {
+      height: 1px;
+      background: #c7c3bd;
+      margin: 10px 0;
     }
     .control-row {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 10px 0;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .control-row label {
+      width: 120px;
+      font-size: 11px;
+      text-align: right;
     }
     .control-row input[type="text"],
     .control-row input[type="number"] {
       flex: 1;
-      padding: 6px 8px;
-      border: 1px solid #bbb;
-      border-radius: 6px;
-      font-size: 14px;
+      padding: 4px;
+      border: 1px solid #ada9a4;
+      border-radius: 2px;
+      background: #ffffff;
+      box-sizing: border-box;
+      font-size: 12px;
     }
-    .button-primary {
+    .button-flat {
       display: inline-block;
-      padding: 10px 22px;
-      margin: 6px 8px;
-      border: none;
-      border-radius: 6px;
-      background: #366536;
-      color: #fff;
-      font-weight: 600;
+      padding: 4px 10px;
+      border: 1px solid #a8a5a2;
+      border-radius: 2px;
+      background: #dcd9d4;
+      color: #2f2f2f;
+      font-size: 12px;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      transition: filter 0.15s ease, transform 0.15s ease;
+      box-shadow: inset 0 1px 0 #f5f4f2;
+      min-width: 70px;
+      text-align: center;
     }
-    .button-primary:hover { filter: brightness(1.1); }
-    .button-primary:active { transform: translateY(1px); }
+    .button-flat:hover { background: #e7e4de; }
+    .button-flat:active { background: #cac7c2; }
+    .button-flat:disabled { background: #e2e0de; color: #8a8a8a; cursor: default; }
+    .button-primary { font-weight: 600; }
+    .button-full { width: 100%; }
     .info-box {
-      margin-top: 12px;
-      padding: 10px 12px;
-      background: #f9f9f9;
-      border: 1px dashed #aaa;
-      border-radius: 6px;
-      font-size: 13px;
-      min-height: 40px;
-      white-space: pre-wrap;
+      margin-top: 6px;
+      padding: 6px;
+      border: 1px solid #c0beb9;
+      background: #f9f8f6;
+      font-size: 11px;
+      white-space: normal;
+      line-height: 1.4;
     }
     .two-columns {
       display: flex;
+      gap: 10px;
       flex-wrap: wrap;
-      gap: 24px;
     }
     .two-columns > div {
-      flex: 1 1 280px;
+      flex: 1 1 160px;
     }
     select {
       width: 100%;
-      padding: 6px 8px;
-      border: 1px solid #bbb;
-      border-radius: 6px;
-      font-family: monospace;
-      font-size: 13px;
-      min-height: 200px;
-      background: #fbfbfb;
+      padding: 4px;
+      border: 1px solid #ada9a4;
+      border-radius: 2px;
+      background: #ffffff;
+      box-sizing: border-box;
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 12px;
+      min-height: 180px;
     }
-    .muted { color: #666; font-size: 12px; }
+    .muted { color: #6a6864; font-size: 11px; }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
   </style>
   <script>
     function addLog(msg) {
@@ -147,7 +169,7 @@
     function changeAllSelectedIDs() {
       const changeFn = ensureACAPI('ChangeSelectedElementsID');
       if (!changeFn) {
-        setInfo('id-change-info', '❌ Функция недоступна. Обновите плагин.');
+        setInfo('id-change-info', 'Функция недоступна. Обновите плагин.');
         return;
       }
 
@@ -164,13 +186,13 @@
 
       changeFn(baseName).then(success => {
         if (success) {
-        setInfo('id-change-info', '✅ ID обновлены. Например: ' + baseName + '-01, ' + baseName + '-02...');
+          setInfo('id-change-info', 'ID обновлены. Например: ' + baseName + '-01, ' + baseName + '-02...');
           if (baseInput) baseInput.value = '';
         } else {
-          setInfo('id-change-info', '❌ Не удалось обновить ID. Проверьте выделение.');
+          setInfo('id-change-info', 'Не удалось обновить ID. Проверьте выделение.');
         }
       }).catch(err => {
-        setInfo('id-change-info', '❌ Ошибка: ' + err);
+        setInfo('id-change-info', 'Ошибка: ' + err);
       });
     }
 
@@ -427,7 +449,7 @@
       const paramsString = normalizedFolder + '|' + layerName + '|' + (hideLayer ? '1' : '0');
       const fn = ensureACAPI('CreateLayerAndMoveElements');
       if (!fn) {
-        setInfo('info-layers', '❌ Функция CreateLayerAndMoveElements недоступна.');
+        setInfo('info-layers', 'Функция CreateLayerAndMoveElements недоступна.');
         return;
       }
 
@@ -437,15 +459,15 @@
       fn(paramsString).then(success => {
         if (success) {
           setInfo('info-layers', hideLayer
-            ? '✅ Слой создан, элементы перемещены и скрыты.'
-            : '✅ Слой создан и элементы перемещены.');
+            ? 'Слой создан, элементы перемещены и скрыты.'
+            : 'Слой создан и элементы перемещены.');
           document.getElementById('layerName').value = '';
           loadExistingLayersList(document.getElementById('layerFolder')?.value || '');
         } else {
-          setInfo('info-layers', '❌ Не удалось создать слой или переместить элементы.');
+          setInfo('info-layers', 'Не удалось создать слой или переместить элементы.');
         }
       }).catch(err => {
-        setInfo('info-layers', '❌ Ошибка: ' + err);
+        setInfo('info-layers', 'Ошибка: ' + err);
       });
     }
 
@@ -466,55 +488,79 @@
 
       whenACAPIReadyDo(() => loadExistingLayersList());
     });
+
+    document.addEventListener('click', function (e) {
+      const el = e.target.closest('[data-help-url]');
+      if (!el) return;
+      e.preventDefault();
+      let url = el.getAttribute('data-help-url');
+      if (!url) return;
+      const separator = url.includes('?') ? '&' : '?';
+      url = url + separator + 'v=' + Date.now();
+      const api = window.ACAPI;
+      if (api && typeof api.OpenHelp === 'function') {
+        Promise.resolve(api.OpenHelp(url)).catch(err => console.log('[IdLayers] OpenHelp error:', err));
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }, { passive: false });
   </script>
 </head>
 <body>
-  <div class="container">
+  <div class="palette">
     <h1>ID / Слои</h1>
 
-    <section class="section" id="section-id">
-      <h2>Массовое назначение ID</h2>
+    <div class="section" id="section-id">
+      <div class="section-title">Массовое назначение ID</div>
       <div class="control-row">
-        <label for="baseID" style="min-width:140px;">Базовое имя:</label>
+        <label for="baseID">Базовое имя:</label>
         <input type="text" id="baseID" placeholder="например: Сосна обыкновенная">
       </div>
-      <div>
-        <button class="button-primary" onclick="changeAllSelectedIDs()">Установить ID для выбранных</button>
-      </div>
+      <button class="button-flat button-full button-primary" onclick="changeAllSelectedIDs()">Установить ID для выбранных</button>
       <div id="id-change-info" class="info-box">
         Введите базовое имя и нажмите кнопку. Все выбранные элементы получат ID с номером (например: Сосна-01, Сосна-02...).
       </div>
-    </section>
+      <div class="controls-row">
+        <span></span>
+        <button class="button-flat button-inline" data-help-url="https://landscape.227.info/help/change-id">Справка</button>
+      </div>
+    </div>
 
-    <section class="section" id="section-layers">
-      <h2>Слои</h2>
+    <div class="divider"></div>
+
+    <div class="section" id="section-layers">
+      <div class="section-title">Слои</div>
       <div class="two-columns">
         <div>
-          <label style="display:block; margin-bottom:6px;" for="layerFolder">Папка слоя:</label>
+          <label for="layerFolder">Папка слоя:</label>
           <input type="text" id="layerFolder" placeholder="например: Ландшафт/Растения">
-          <p class="muted">Разделяйте подпапки символом "/" (например: "Ландшафт/Растения/Деревья").</p>
+          <p class="muted">Разделяйте подпапки символом "/" (например: Ландшафт/Растения/Деревья).</p>
 
-          <label style="display:block; margin:12px 0 6px 0;" for="layerName">Новый слой:</label>
+          <label for="layerName">Новый слой:</label>
           <input type="text" id="layerName" placeholder="например: Сосны обыкновенные">
 
-          <label style="display:block; margin:12px 0 6px 0;" for="hideLayer">
-            <input type="checkbox" id="hideLayer" style="margin-right:6px;">Скрыть созданный слой
+          <label style="display:flex; align-items:center; gap:6px; margin-top:10px;">
+            <input type="checkbox" id="hideLayer">Скрыть созданный слой
           </label>
 
-          <button class="button-primary" onclick="createLayerAndMoveElements()">Создать и переместить</button>
+          <button class="button-flat button-full button-primary" onclick="createLayerAndMoveElements()">Создать и переместить</button>
         </div>
         <div>
-          <label style="display:block; margin-bottom:6px;">Существующие папки и слои:</label>
+          <label>Существующие папки и слои:</label>
           <select id="existingLayersList" size="12" onchange="selectFromList()" ondblclick="handleLayersListDoubleClick()">
             <option value="">Загрузка...</option>
           </select>
-          <p class="muted">Выберите или дважды щелкните элемент, чтобы заполнить поля.</p>
+          <p class="muted">Выберите или дважды щёлкните элемент, чтобы заполнить поля.</p>
         </div>
       </div>
       <div id="info-layers" class="info-box">
-        Создаст папку (если нет), создаст слой в ней, переместит выделенные элементы и при необходимости скроет слой.
+        Создаёт папку (если её нет), создаёт слой и перемещает выбранные элементы. При необходимости слой скрывается.
       </div>
-    </section>
+      <div class="controls-row">
+        <span></span>
+        <button class="button-flat button-inline" data-help-url="https://landscape.227.info/help/layers">Справка</button>
+      </div>
+    </div>
   </div>
 </body>
 </html>

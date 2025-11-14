@@ -5,84 +5,110 @@
   <title>Landscape Helper — Разметка</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      margin: 20px;
-      color: #333;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #efefef;
+      margin: 0;
+      color: #2f2f2f;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 12px 0;
     }
-    .container {
-      max-width: 560px;
-      margin: 0 auto;
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-      padding: 24px 30px;
-      border: 1px solid #d4d0c7;
+    .palette {
+      width: 320px;
+      background: #efefef;
+      border: 1px solid #a6a3a0;
+      box-shadow: inset 0 0 0 1px #f8f8f8;
+      padding: 12px;
+      box-sizing: border-box;
+      font-size: 12px;
+      line-height: 1.35;
     }
     h1 {
-      margin: 0 0 16px 0;
-      font-size: 22px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #4F604F;
-      text-align: center;
-    }
-    .button-primary {
-      display: inline-block;
-      padding: 10px 20px;
-      margin: 6px 8px;
-      border: none;
-      border-radius: 6px;
-      background: #366536;
-      color: #fff;
+      font-size: 13px;
       font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      transition: filter 0.15s ease, transform 0.15s ease;
+      margin: 0 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
-    .button-primary:hover {
-      filter: brightness(1.1);
+    .section {
+      margin-bottom: 12px;
     }
-    .button-primary:active {
-      transform: translateY(1px);
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      font-size: 11px;
+      color: #54524f;
+    }
+    .divider {
+      height: 1px;
+      background: #c7c3bd;
+      margin: 10px 0;
     }
     .form-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin: 12px 0;
-      gap: 12px;
+      gap: 8px;
+      margin-top: 6px;
     }
     .form-row label {
-      flex: 1;
-      min-width: 160px;
-      text-align: right;
-      font-weight: 600;
+      width: 140px;
+      font-size: 11px;
     }
-    .form-row input[type="number"] {
+    input[type="number"] {
       flex: 1;
-      padding: 6px 8px;
-      border: 1px solid #bbb;
-      border-radius: 6px;
-      font-size: 14px;
+      padding: 4px;
+      border: 1px solid #ada9a4;
+      border-radius: 2px;
+      background: #ffffff;
+      box-sizing: border-box;
+      font-size: 12px;
+      text-align: center;
     }
-    #info-markup {
-      margin-top: 18px;
-      padding: 12px 14px;
-      background: #f9f9f9;
-      border: 1px dashed #aaa;
-      border-radius: 6px;
-      font-size: 13px;
-      min-height: 46px;
+    .button-flat {
+      display: inline-block;
+      padding: 4px 10px;
+      border: 1px solid #a8a5a2;
+      border-radius: 2px;
+      background: #dcd9d4;
+      color: #2f2f2f;
+      font-size: 12px;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 #f5f4f2;
+      min-width: 70px;
+      text-align: center;
+    }
+    .button-flat:hover { background: #e7e4de; }
+    .button-flat:active { background: #cac7c2; }
+    .button-flat:disabled { background: #e2e0de; color: #8a8a8a; cursor: default; }
+    .button-primary { font-weight: 600; }
+    .button-full { width: 100%; }
+    .button-inline { padding: 4px 12px; }
+    .controls-column {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      white-space: pre-wrap;
+      flex-direction: column;
+      gap: 6px;
     }
-    .section {
-      text-align: center;
-      margin-top: 12px;
+    .info-box {
+      margin-top: 6px;
+      padding: 6px;
+      border: 1px solid #c0beb9;
+      background: #f9f8f6;
+      font-size: 11px;
+      white-space: normal;
+      line-height: 1.4;
+    }
+    .info-box ul {
+      margin: 6px 0 0 14px;
+      padding: 0;
+    }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
     }
   </style>
   <script>
@@ -103,7 +129,7 @@
       const api = window.ACAPI;
       if (!api || typeof api[fnName] !== 'function') {
         addLog('ACAPI.' + fnName + ' unavailable');
-        setInfo('❌ Функция недоступна. Обновите плагин.');
+        setInfo('Функция недоступна. Обновите плагин.');
         return null;
       }
       return api[fnName].bind(api);
@@ -112,13 +138,13 @@
     async function setMarkupStep() {
       const input = document.getElementById('markupStep');
       if (!input) {
-        setInfo('❌ Поле шага не найдено.');
+        setInfo('Поле шага не найдено.');
         return;
       }
       const raw = input.value.trim().replace(',', '.');
       const value = parseFloat(raw);
       if (!Number.isFinite(value) || value <= 0) {
-        setInfo('❌ Укажите положительный шаг в мм.');
+        setInfo('Укажите положительный шаг в миллиметрах.');
         input.focus();
         return;
       }
@@ -131,9 +157,9 @@
       setInfo('Установка шага ' + value + ' мм...');
       try {
         const ok = await fn(value);
-        setInfo(ok ? '✅ Шаг установлен: ' + value + ' мм.' : '❌ Не удалось установить шаг.');
+        setInfo(ok ? 'Шаг установлен: ' + value + ' мм.' : 'Не удалось установить шаг.');
       } catch (err) {
-        setInfo('❌ Ошибка: ' + err);
+        setInfo('Ошибка: ' + err);
       }
     }
 
@@ -145,9 +171,9 @@
       setInfo('Создание разметки...');
       try {
         const ok = await fn();
-        setInfo(ok ? '✅ Разметка создана.' : '❌ Не удалось создать разметку.');
+        setInfo(ok ? 'Разметка создана.' : 'Не удалось создать разметку.');
       } catch (err) {
-        setInfo('❌ Ошибка: ' + err);
+        setInfo('Ошибка: ' + err);
       }
     }
 
@@ -159,9 +185,9 @@
       setInfo('Создание размеров к линии...');
       try {
         const ok = await fn();
-        setInfo(ok ? '✅ Размеры к линии созданы.' : '❌ Не удалось создать размеры.');
+        setInfo(ok ? 'Размеры к линии созданы.' : 'Не удалось создать размеры.');
       } catch (err) {
-        setInfo('❌ Ошибка: ' + err);
+        setInfo('Ошибка: ' + err);
       }
     }
 
@@ -173,9 +199,9 @@
       setInfo('Создание размеров между объектами...');
       try {
         const ok = await fn();
-        setInfo(ok ? '✅ Размеры между объектами созданы.' : '❌ Не удалось создать размеры.');
+        setInfo(ok ? 'Размеры между объектами созданы.' : 'Не удалось создать размеры.');
       } catch (err) {
-        setInfo('❌ Ошибка: ' + err);
+        setInfo('Ошибка: ' + err);
       }
     }
 
@@ -187,34 +213,70 @@
       setInfo('Создание размеров к точке...');
       try {
         const ok = await fn();
-        setInfo(ok ? '✅ Размеры к точке созданы.' : '❌ Не удалось создать размеры.');
+        setInfo(ok ? 'Размеры к точке созданы.' : 'Не удалось создать размеры.');
       } catch (err) {
-        setInfo('❌ Ошибка: ' + err);
+        setInfo('Ошибка: ' + err);
       }
     }
+
+    document.addEventListener('click', function (e) {
+      const el = e.target.closest('[data-help-url]');
+      if (!el) return;
+      e.preventDefault();
+      let url = el.getAttribute('data-help-url');
+      if (!url) return;
+      const separator = url.includes('?') ? '&' : '?';
+      url = url + separator + 'v=' + Date.now();
+      const api = window.ACAPI;
+      if (api && typeof api.OpenHelp === 'function') {
+        Promise.resolve(api.OpenHelp(url)).catch(err => console.log('[Markup] OpenHelp error:', err));
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }, { passive: false });
   </script>
 </head>
 <body>
-  <div class="container">
+  <div class="palette">
     <h1>Разметка</h1>
 
-    <div class="form-row">
-      <label for="markupStep">Шаг разметки (мм):</label>
-      <input type="number" id="markupStep" step="1" value="2500">
-      <button class="button-primary" onclick="setMarkupStep()">Установить</button>
+    <div class="section">
+      <div class="section-title">Шаг разметки</div>
+      <div class="form-row">
+        <label for="markupStep">Шаг (мм):</label>
+        <input type="number" id="markupStep" step="1" value="2500">
+        <button class="button-flat button-inline button-primary" onclick="setMarkupStep()">ОК</button>
+      </div>
+      <button class="button-flat button-full button-primary" style="margin-top:8px;" onclick="createMarkupDimensions()">Создать разметку</button>
     </div>
+
+    <div class="divider"></div>
 
     <div class="section">
-      <button class="button-primary" onclick="createMarkupDimensions()">Создать разметку</button>
+      <div class="section-title">Дополнительные размеры</div>
+      <div class="controls-column">
+        <button class="button-flat button-full button-primary" onclick="createDimensionsToLine()">Размеры к линии</button>
+        <button class="button-flat button-full button-primary" onclick="createDimensionsBetween()">Размеры между объектами</button>
+        <button class="button-flat button-full button-primary" onclick="createDimensionsToPoint()">Размеры к точке</button>
+      </div>
     </div>
+
+    <div class="divider"></div>
 
     <div class="section">
-      <button class="button-primary" onclick="createDimensionsToLine()">Размеры к линии</button>
-      <button class="button-primary" onclick="createDimensionsBetween()">Размеры между объектами</button>
-      <button class="button-primary" onclick="createDimensionsToPoint()">Размеры к точке</button>
+      <div id="info-markup" class="info-box">
+        <strong>Как работать:</strong>
+        <ul>
+          <li>Введите шаг и нажмите «Создать разметку», размеры появятся вдоль выбранных линейных объектов.</li>
+          <li>Команды ниже добавляют размеры к линии, между объектами или к точке опоры.</li>
+        </ul>
+      </div>
+      <div class="controls-row">
+        <span></span>
+        <button class="button-flat button-inline" data-help-url="https://landscape.227.info/help/dimensions">Справка</button>
+      </div>
     </div>
-
-    <div id="info-markup">Подсказка: задайте шаг, затем запускайте нужные сценарии.</div>
   </div>
 </body>
 </html>
+
