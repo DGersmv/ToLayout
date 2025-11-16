@@ -182,17 +182,30 @@
         return;
       }
 
-      const widthInput = document.getElementById('meshWidth');
+      const widthLeftInput = document.getElementById('meshWidthLeft');
+      const widthRightInput = document.getElementById('meshWidthRight');
       const stepInput = document.getElementById('meshStep');
       const offsetInput = document.getElementById('meshOffset');
 
-      const width = parseInputNumber(widthInput, 1000);
+      let widthLeft = parseInputNumber(widthLeftInput, 600);
+      let widthRight = parseInputNumber(widthRightInput, 600);
       const step = parseInputNumber(stepInput, 500);
       const offset = parseInputNumber(offsetInput, 0);
 
-      if (!Number.isFinite(width) || width <= 0) {
-        setInfo('Ширина должна быть больше нуля.');
-        widthInput?.focus();
+      // Отрицательные значения воспринимаем по модулю
+      widthLeft = Math.abs(widthLeft);
+      widthRight = Math.abs(widthRight);
+
+      if ((!Number.isFinite(widthLeft) || widthLeft < 0) ||
+          (!Number.isFinite(widthRight) || widthRight < 0)) {
+        setInfo('Ширина слева и справа должны быть неотрицательными числами.');
+        (widthLeftInput || widthRightInput)?.focus();
+        return;
+      }
+
+      if (widthLeft === 0 && widthRight === 0) {
+        setInfo('Хотя бы одна из ширин (слева или справа) должна быть больше нуля.');
+        (widthLeftInput || widthRightInput)?.focus();
         return;
       }
       if (!Number.isFinite(step) || step <= 0) {
@@ -201,7 +214,7 @@
         return;
       }
 
-      const payload = 'width:' + width + ',step:' + step + ',offset:' + offset;
+      const payload = 'leftWidth:' + widthLeft + ',rightWidth:' + widthRight + ',step:' + step + ',offset:' + offset;
       addLog('CreateMeshFromContour → ' + payload);
       setInfo('Создание сетки...');
 
@@ -247,8 +260,12 @@
     <div class="section">
       <div class="section-title">Параметры</div>
       <div class="form-row">
-        <label for="meshWidth">Ширина (мм):</label>
-        <input type="number" id="meshWidth" step="1" value="1000">
+        <label for="meshWidthLeft">Ширина слева (мм):</label>
+        <input type="number" id="meshWidthLeft" step="1" value="600">
+      </div>
+      <div class="form-row">
+        <label for="meshWidthRight">Ширина справа (мм):</label>
+        <input type="number" id="meshWidthRight" step="1" value="600">
       </div>
       <div class="form-row">
         <label for="meshStep">Шаг (мм):</label>
@@ -265,14 +282,14 @@
 
     <div class="section">
       <div id="info-mesh" class="info-box">
-        <p>Создает элемент «Сетка» из базовой линии с заданными параметрами.</p>
+        <p>Создает элемент «Сетка» из базовой линии с заданными параметрами: отдельная ширина слева и справа.</p>
         <strong>Порядок работы</strong>
         <ol>
           <li>Выберите базовую линию.</li>
           <li>При необходимости укажите поверхность сетки для высот.</li>
           <li>Настройте параметры и запустите создание.</li>
         </ol>
-        <p>Если сетка не выбрана, она создается на Z = 0. Если выбрана поверхность, используется ее рельеф с учётом offset.</p>
+        <p>Если сетка не выбрана, она создается на Z = 0. Если выбрана поверхность, используется ее рельеф с учётом offset. Значение 0 допускается для любой стороны; отрицательные значения воспринимаются по модулю.</p>
       </div>
       <div class="controls-row">
         <span></span>

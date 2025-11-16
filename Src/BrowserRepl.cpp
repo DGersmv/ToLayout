@@ -4,6 +4,8 @@
 
 
 #include "BrowserRepl.hpp"
+
+#include <Windows.h>
 #include "SelectionHelper.hpp"
 #include "RotateHelper.hpp"
 #include "LandscapeHelper.hpp"
@@ -24,6 +26,9 @@
 #include "IdLayersPalette.hpp"
 #include "AnglePalette.hpp"
 #include "ColumnOrientHelper.hpp"
+#include "SelectionPropertyHelper.hpp"
+#include "SelectionMetricsHelper.hpp"
+#include "SendXlsPalette.hpp"
 
 
 
@@ -398,6 +403,96 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return jsResult;
 		}));
 
+	jsACAPI->AddItem(new JS::Function("GetSelectedProperties", [](GS::Ref<JS::Base> param) {
+		API_Guid requestedGuid = APINULLGuid;
+		if (param != nullptr) {
+			GS::UniString guidStr = GetStringFromJavaScriptVariable(param);
+			if (!guidStr.IsEmpty()) {
+				requestedGuid = APIGuidFromString(guidStr.ToCStr().Get());
+			}
+		}
+
+		GS::Array<SelectionPropertyHelper::PropertyInfo> props = (requestedGuid == APINULLGuid)
+			? SelectionPropertyHelper::CollectForFirstSelected()
+			: SelectionPropertyHelper::CollectForGuid(requestedGuid);
+		GS::Ref<JS::Array> jsProps = new JS::Array();
+		for (const auto& info : props) {
+			GS::Ref<JS::Object> obj = new JS::Object();
+			obj->AddItem("guid", new JS::Value(APIGuidToString(info.propertyGuid)));
+			obj->AddItem("name", new JS::Value(info.propertyName));
+			obj->AddItem("value", new JS::Value(info.valueString));
+			jsProps->AddItem(obj);
+		}
+		return jsProps;
+	}));
+
+	jsACAPI->AddItem(new JS::Function("GetSelectionSeoMetrics", [](GS::Ref<JS::Base> param) {
+		API_Guid requestedGuid = APINULLGuid;
+		if (param != nullptr) {
+			GS::UniString guidStr = GetStringFromJavaScriptVariable(param);
+			if (!guidStr.IsEmpty()) {
+				requestedGuid = APIGuidFromString(guidStr.ToCStr().Get());
+			}
+		}
+
+		GS::Array<SelectionMetricsHelper::Metric> metrics = (requestedGuid == APINULLGuid)
+			? SelectionMetricsHelper::CollectForFirstSelected()
+			: SelectionMetricsHelper::CollectForGuid(requestedGuid);
+		GS::Ref<JS::Array> jsMetrics = new JS::Array();
+		for (const auto& metric : metrics) {
+			GS::Ref<JS::Object> obj = new JS::Object();
+			obj->AddItem("key", new JS::Value(metric.key));
+			obj->AddItem("name", new JS::Value(metric.name));
+			obj->AddItem("grossValue", new JS::Value(metric.grossValue));
+			obj->AddItem("netValue", new JS::Value(metric.netValue));
+			obj->AddItem("diffValue", new JS::Value(metric.diffValue));
+			jsMetrics->AddItem(obj);
+		}
+		return jsMetrics;
+	}));
+
+	// --- Send to Excel / CSV export ---
+	jsACAPI->AddItem(new JS::Function("SaveSendXls", [](GS::Ref<JS::Base> param) {
+		// param: строка CSV, которую нужно сохранить
+		GS::UniString csvData = GetStringFromJavaScriptVariable(param);
+
+		// Используем стандартный Windows диалог "Сохранить как"
+		OPENFILENAMEW ofn;
+		wchar_t fileName[MAX_PATH] = L"selection_export.csv";
+		ZeroMemory(&ofn, sizeof(ofn));
+		ofn.lStructSize = sizeof(ofn);
+		ofn.hwndOwner = nullptr;
+		ofn.lpstrFilter = L"CSV Files (*.csv)\0*.csv\0All Files (*.*)\0*.*\0";
+		ofn.lpstrFile = fileName;
+		ofn.nMaxFile = MAX_PATH;
+		ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
+		ofn.lpstrDefExt = L"csv";
+
+		if (!GetSaveFileNameW(&ofn)) {
+			// Пользователь мог просто отменить диалог
+			return ConvertToJavaScriptVariable(false);
+		}
+
+		FILE* fp = _wfopen(fileName, L"wb");
+		if (fp == nullptr) {
+			return ConvertToJavaScriptVariable(false);
+		}
+
+		// Пишем BOM UTF‑8, затем содержимое в кодировке по умолчанию UniString->CStr (обычно UTF‑8)
+		const unsigned char bom[3] = { 0xEF, 0xBB, 0xBF };
+		fwrite(bom, 1, 3, fp);
+
+		GS::UniString dataToWrite = csvData;
+		const char* bytes = dataToWrite.ToCStr().Get();
+		if (bytes != nullptr) {
+			const size_t len = strlen(bytes);
+			fwrite(bytes, 1, len, fp);
+		}
+
+		fclose(fp);
+		return ConvertToJavaScriptVariable(true);
+		}));
+
 	jsACAPI->AddItem(new JS::Function("CreateLayerAndMoveElements", [](GS::Ref<JS::Base> param) {
 		if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] CreateLayerAndMoveElements");
 		
@@ -703,6 +798,14 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return new JS::Value(true);
 		}));
 
+	jsACAPI->AddItem(new JS::Function("OpenSendXlsPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenSendXlsPalette] request", false);
+#endif
+		SendXlsPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
 	jsACAPI->AddItem(new JS::Function("LogMessage", [](GS::Ref<JS::Base> param) {
 		if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			if (v->GetType() == JS::Value::STRING) {
@@ -791,8 +894,9 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 	jsACAPI->AddItem(new JS::Function("CreateMeshFromContour", [](GS::Ref<JS::Base> param) {
 		if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] CreateMeshFromContour() - создание Mesh из контура");
 		
-		// Парсим параметры: принимаем строку "width:..,step:..,offset:.."
-		double width = 1000.0; // мм по умолчанию
+		// Парсим параметры: принимаем строку "leftWidth:..,rightWidth:..,step:..,offset:.."
+		double leftWidth = 600.0;  // мм по умолчанию
+		double rightWidth = 600.0; // мм по умолчанию
 		double step = 500.0;   // мм по умолчанию
 		double offset = 0.0;   // мм по умолчанию
 		
@@ -802,8 +906,13 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 					GS::UniString s = v->GetString();
 					const char* c = s.ToCStr().Get();
 					
-					if (std::strncmp(c, "width:", 6) == 0) { 
-						std::sscanf(c + 6, "%lf", &width); 
+					const char* leftPtr = std::strstr(c, "leftWidth:");
+					if (leftPtr != nullptr) {
+						std::sscanf(leftPtr + 10, "%lf", &leftWidth);
+					}
+					const char* rightPtr = std::strstr(c, "rightWidth:");
+					if (rightPtr != nullptr) {
+						std::sscanf(rightPtr + 11, "%lf", &rightWidth);
 					}
 					const char* stepPtr = std::strstr(c, "step:");
 					if (stepPtr != nullptr) {
@@ -818,10 +927,13 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		}
 		
 		if (BrowserRepl::HasInstance()) {
-			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf("[JS] CreateMeshFromContour parsed: width=%.1fmm, step=%.1fmm, offset=%.1fmm", width, step, offset));
+			BrowserRepl::GetInstance().LogToBrowser(GS::UniString::Printf(
+				"[JS] CreateMeshFromContour parsed: leftWidth=%.1fmm, rightWidth=%.1fmm, step=%.1fmm, offset=%.1fmm",
+				leftWidth, rightWidth, step, offset
+			));
 		}
 		
-		bool success = ShellHelper::CreateMeshFromContour(width, step, offset);
+		bool success = ShellHelper::CreateMeshFromContour(leftWidth, rightWidth, step, offset);
 		return new JS::Value(success);
 	}));
 	

@@ -1590,9 +1590,10 @@ bool CreateMorphFromContour(double widthMM, double stepMM, double thicknessMM,
 }
 
 // =============== Создание Mesh из контура ===============
-bool CreateMeshFromContour(double widthMM, double stepMM, double offsetMM)
+bool CreateMeshFromContour(double leftWidthMM, double rightWidthMM, double stepMM, double offsetMM)
 {
-    Log("[ShellHelper] CreateMeshFromContour: START, width=%.1fmm, step=%.1fmm, offset=%.1fmm", widthMM, stepMM, offsetMM);
+    Log("[ShellHelper] CreateMeshFromContour: START, leftWidth=%.1fmm, rightWidth=%.1fmm, step=%.1fmm, offset=%.1fmm",
+        leftWidthMM, rightWidthMM, stepMM, offsetMM);
     
     // Конвертируем offset из мм в метры
     double offsetM = offsetMM / 1000.0;
@@ -1663,7 +1664,16 @@ bool CreateMeshFromContour(double widthMM, double stepMM, double offsetMM)
     
     // Используем логику из Create3DShellFromPath для получения точек
     double step = stepMM / 1000.0; // шаг в метрах
-    double halfWidth = widthMM / 2000.0; // половина ширины в метрах
+
+    // Отрицательные значения ширины воспринимаем по модулю
+    double leftWidthM = std::fabs(leftWidthMM) / 1000.0;   // левая ширина в метрах
+    double rightWidthM = std::fabs(rightWidthMM) / 1000.0; // правая ширина в метрах
+
+    // Если обе ширины равны нулю, создавать нечего
+    if (leftWidthM <= 0.0 && rightWidthM <= 0.0) {
+        Log("[ShellHelper] ERROR: Both left and right widths are zero. Nothing to create.");
+        return false;
+    }
     
     // Генерируем позиции точек по шагу
     GS::Array<double> sVals;
@@ -1750,13 +1760,13 @@ bool CreateMeshFromContour(double widthMM, double stepMM, double offsetMM)
         
         // Шаг 3: Создаем левую и правую точки с применением offset
         API_Coord3D leftPoint = {
-            pointOnPath.x + perpX * halfWidth,
-            pointOnPath.y + perpY * halfWidth,
+            pointOnPath.x + perpX * leftWidthM,
+            pointOnPath.y + perpY * leftWidthM,
             baseZ + offsetM  // Применяем offset к Z координате
         };
         API_Coord3D rightPoint = {
-            pointOnPath.x - perpX * halfWidth,
-            pointOnPath.y - perpY * halfWidth,
+            pointOnPath.x - perpX * rightWidthM,
+            pointOnPath.y - perpY * rightWidthM,
             baseZ + offsetM  // Применяем offset к Z координате
         };
         
