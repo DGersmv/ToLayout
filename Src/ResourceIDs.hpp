@@ -17,7 +17,8 @@
 #define ToolbarButtonContourId  9
 #define ToolbarButtonMeshId     10
 #define ToolbarButtonCSVId      11
-#define ToolbarButtonSupportId  12
+#define ToolbarButtonRandomizerId 12
+#define ToolbarButtonSupportId  13
 
 // Icon resource IDs
 #define IconTableResId          32100
@@ -30,6 +31,7 @@
 #define IconContourResId        32107
 #define IconMeshResId           32108
 #define IconCSVResId            32109
+#define IconRandomizerResId     32112
 #define IconSupportResId        32110
 #define IconCloseResId          32111
 
@@ -75,5 +77,9 @@ constexpr short SendXlsHtmlResId = 190;
 constexpr short SelectionDetailsPaletteResId = 32610;
 constexpr short SelectionDetailsBrowserCtrlId = 1;
 constexpr short SelectionDetailsHtmlResId = 200;
+
+constexpr short RandomizerPaletteResId = 32620;
+constexpr short RandomizerBrowserCtrlId = 1;
+constexpr short RandomizerHtmlResId = 210;
 
 #endif

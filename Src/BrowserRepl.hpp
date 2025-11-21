@@ -48,6 +48,7 @@ private:
     DG::IconButton buttonContour;
     DG::IconButton buttonMesh;
     DG::IconButton buttonCSV;
+    DG::IconButton buttonRandomizer;
     DG::IconButton buttonSupport;
 
     void SetMenuItemCheckedState(bool isChecked);

@@ -390,7 +390,9 @@ bool CreateShellFromLine(double widthMM, double stepMM)
 // =============== Анализ базовой линии ===============
 GS::Array<API_Coord3D> AnalyzeBaseLine(const API_Guid& lineGuid, double stepMM)
 {
+#ifdef DEBUG_UI_LOGS
     ACAPI_WriteReport("[ShellHelper] AnalyzeBaseLine: step=%.1fmm (заглушка)", false, stepMM);
+#endif
     
     // TODO: Использовать существующие функции LandscapeHelper для получения точек линии
     // Пока возвращаем пустой массив
@@ -403,13 +405,17 @@ GS::Array<API_Coord3D> GeneratePerpendicularLines(
     const GS::Array<API_Coord3D>& basePoints, 
     double widthMM)
 {
+#ifdef DEBUG_UI_LOGS
     ACAPI_WriteReport("[ShellHelper] GeneratePerpendicularLines: %d точек, ширина=%.1fmm", false, 
         (int)basePoints.GetSize(), widthMM);
+#endif
     
     GS::Array<API_Coord3D> perpendicularPoints;
     
     if (basePoints.GetSize() < 2) {
+#ifdef DEBUG_UI_LOGS
         ACAPI_WriteReport("[ShellHelper] Недостаточно точек для генерации перпендикуляров", false);
+#endif
         return perpendicularPoints;
     }
     
@@ -449,14 +455,18 @@ GS::Array<API_Coord3D> GeneratePerpendicularLines(
         perpendicularPoints.Push(right);
     }
     
+#ifdef DEBUG_UI_LOGS
     ACAPI_WriteReport("[ShellHelper] Сгенерировано %d перпендикулярных точек", false, (int)perpendicularPoints.GetSize());
+#endif
     return perpendicularPoints;
 }
 
 // =============== Проекция на 3D сетку ===============
 GS::Array<API_Coord3D> ProjectToMesh(const GS::Array<API_Coord3D>& points)
 {
+#ifdef DEBUG_UI_LOGS
     ACAPI_WriteReport("[ShellHelper] ProjectToMesh: %d точек", false, (int)points.GetSize());
+#endif
     
     GS::Array<API_Coord3D> projectedPoints;
     
@@ -468,17 +478,23 @@ GS::Array<API_Coord3D> ProjectToMesh(const GS::Array<API_Coord3D>& points)
         API_Vector3D normal = {};
         if (GroundHelper::GetGroundZAndNormal(point, z, normal)) {
             projected.z = z;
+#ifdef DEBUG_UI_LOGS
             ACAPI_WriteReport("[ShellHelper] Точка (%.3f, %.3f) спроецирована на Z=%.3f", false, 
                 point.x, point.y, z);
+#endif
         } else {
+#ifdef DEBUG_UI_LOGS
             ACAPI_WriteReport("[ShellHelper] Не удалось спроецировать точку (%.3f, %.3f)", false, 
                 point.x, point.y);
+#endif
         }
         
         projectedPoints.Push(projected);
     }
     
+#ifdef DEBUG_UI_LOGS
     ACAPI_WriteReport("[ShellHelper] Спроецировано %d точек", false, (int)projectedPoints.GetSize());
+#endif
     return projectedPoints;
 }
 
@@ -577,15 +593,20 @@ bool CreatePerpendicularLines(const API_Element& baseLine, double widthMM)
 // =============== Создание геометрии оболочки ===============
 bool CreateShellGeometry(const GS::Array<API_Coord3D>& shellPoints)
 {
+#ifdef DEBUG_UI_LOGS
     ACAPI_WriteReport("[ShellHelper] CreateShellGeometry: %d точек", false, (int)shellPoints.GetSize());
+#endif
     
     if (shellPoints.GetSize() < 2) {
+#ifdef DEBUG_UI_LOGS
         ACAPI_WriteReport("[ShellHelper] Недостаточно точек для создания оболочки", false);
+#endif
         return false;
     }
     
     // TODO: Создать полилинию или другие элементы из точек оболочки
     // Пока просто логируем точки
+#ifdef DEBUG_UI_LOGS
     for (UIndex i = 0; i < shellPoints.GetSize(); ++i) {
         const API_Coord3D& point = shellPoints[i];
         ACAPI_WriteReport("[ShellHelper] Точка %d: (%.3f, %.3f, %.3f)", false, 
@@ -593,6 +614,7 @@ bool CreateShellGeometry(const GS::Array<API_Coord3D>& shellPoints)
     }
     
     ACAPI_WriteReport("[ShellHelper] Оболочка создана (пока заглушка)", false);
+#endif
     return true;
 }
 
