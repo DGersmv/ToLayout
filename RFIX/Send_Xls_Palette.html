@@ -358,7 +358,7 @@
         setInfo('Нет выбранных элементов. Нажмите «Обновить», чтобы зафиксировать выделение.');
         return;
       }
-      setInfo('Снимок выделения: элементов ' + snapshot.totalCount + '. Базовый GUID: ' + snapshot.firstGuid);
+      setInfo('Снимок выделения: элементов ' + snapshot.totalCount);
     }
 
     function buildSelectableCell(groupKey, field, value) {
@@ -507,13 +507,11 @@
     }
 
     function updateActiveElementInfo() {
-      const guidCell = document.getElementById('info-guid');
       const typeCell = document.getElementById('info-type');
       const idCell = document.getElementById('info-id');
       const layerCell = document.getElementById('info-layer');
 
       if (!activeElementGuid || !sourceRowsByGuid.has(activeElementGuid)) {
-        if (guidCell) guidCell.textContent = '—';
         if (typeCell) typeCell.textContent = '—';
         if (idCell) idCell.textContent = '—';
         if (layerCell) layerCell.textContent = '—';
@@ -522,7 +520,6 @@
       }
 
       const info = sourceRowsByGuid.get(activeElementGuid);
-      if (guidCell) guidCell.textContent = activeElementGuid;
       if (typeCell) typeCell.textContent = info.type || '—';
       if (idCell) idCell.textContent = info.elemID || '—';
       if (layerCell) layerCell.textContent = info.layer || '—';
@@ -694,12 +691,12 @@
         setPropertyInfoMessage('Функция получения свойств недоступна в этой версии.');
         return;
       }
-      setPropertyInfoMessage('Загрузка свойств для GUID ' + guid + '...');
+      setPropertyInfoMessage('Загрузка свойств...');
       try {
         const props = await window.ACAPI.GetSelectedProperties(guid);
         renderPropertyTable(Array.isArray(props) ? props : []);
         setPropertyInfoMessage(props && props.length > 0
-          ? `Получено ${props.length} свойств (GUID ${guid})`
+          ? `Получено ${props.length} свойств`
           : 'Свойства не найдены. Выберите элемент и попробуйте снова.');
       } catch (error) {
         setPropertyInfoMessage('Ошибка: ' + error);
@@ -751,12 +748,12 @@
         renderSeoMetricsTable([]);
         return;
       }
-      setMetricsInfoMessage('Расчет площадей и объемов для GUID ' + guid + '...');
+      setMetricsInfoMessage('Расчет площадей и объемов...');
       try {
         const metrics = await window.ACAPI.GetSelectionSeoMetrics(guid);
         renderSeoMetricsTable(Array.isArray(metrics) ? metrics : []);
         setMetricsInfoMessage(metrics && metrics.length
-          ? `Получено метрик: ${metrics.length} (GUID ${guid})`
+          ? `Получено метрик: ${metrics.length}`
           : 'Нет доступных метрик для выделенного элемента.');
       } catch (err) {
         setMetricsInfoMessage('Ошибка: ' + err);
@@ -1046,7 +1043,6 @@
         <table>
           <thead>
             <tr>
-              <th>GUID</th>
               <th>Тип</th>
               <th>ID</th>
               <th>Слой</th>
@@ -1054,7 +1050,6 @@
           </thead>
           <tbody>
             <tr>
-              <td id="info-guid">—</td>
               <td id="info-type">—</td>
               <td id="info-id">—</td>
               <td id="info-layer">—</td>
