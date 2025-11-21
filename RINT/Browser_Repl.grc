@@ -15,7 +15,7 @@
 
 /* --- Dockable toolbar palette ----------------------------------------------*/
 
-'GDLG'  32500    Palette | leftCaption | noGrow   0   0  363  32  ""  {
+'GDLG'  32500    Palette | leftCaption | noGrow   0   0  393  32  ""  {
 /* [  0] */ IconButton          3    1   30   30    32111									/* Close button */
 /* [  1] */ IconButton         33    1   30   30    32100									/* Table - Selection Details */
 /* [  2] */ IconButton         63    1   30   30    32101									/* Spline - Distribution */
@@ -27,7 +27,8 @@
 /* [  8] */ IconButton        243    1   30   30    32107									/* Contour */
 /* [  9] */ IconButton        273    1   30   30    32108									/* Mesh */
 /* [ 10] */ IconButton        303    1   30   30    32109									/* CSV - Send to Excel */
-/* [ 11] */ IconButton        333    1   30   30    32110									/* Support - Help */
+/* [ 11] */ IconButton        333    1   30   30    32112									/* Randomizer */
+/* [ 12] */ IconButton        363    1   30   30    32110									/* Support - Help */
 }
 
 'DLGH'  32500  DLG_32500_Browser_Repl {
@@ -42,7 +43,8 @@
 9	"Contour"				IconButton_8
 10	"Mesh"					IconButton_9
 11	"Send to Excel"		IconButton_10
-12	"Support"				IconButton_11
+12	"Randomizer"			IconButton_11
+13	"Support"				IconButton_12
 }
 
 /* --- Dockable browser palette: HELP ---------------------------------------*/
@@ -143,6 +145,15 @@
 
 'DLGH'  32600  DLG_32600_SendXls_Browser {
 1   "SendXls Browser Control"     Browser_0
+}
+
+/* --- Dockable browser palette: RANDOMIZER ---------------------------------------*/
+'GDLG'  32620    Palette | topCaption | close | grow   0   0  520  420  "Randomizer"  {
+/* [  1] */ Browser         0   0  520  420
+}
+
+'DLGH'  32620  DLG_32620_Randomizer_Browser {
+1   "Randomizer Browser Control"     Browser_0
 }
 
 /* --- Dockable browser palette: SELECTION DETAILS ---------------------------------------*/

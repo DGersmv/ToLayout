@@ -28,6 +28,8 @@
 #include "SelectionMetricsHelper.hpp"
 #include "SendXlsPalette.hpp"
 #include "SelectionDetailsPalette.hpp"
+#include "RandomizerPalette.hpp"
+#include "RandomizerHelper.hpp"
 
 
 
@@ -219,6 +221,7 @@ BrowserRepl::BrowserRepl() :
 	buttonContour(GetReference(), ToolbarButtonContourId),
 	buttonMesh(GetReference(), ToolbarButtonMeshId),
 	buttonCSV(GetReference(), ToolbarButtonCSVId),
+	buttonRandomizer(GetReference(), ToolbarButtonRandomizerId),
 	buttonSupport(GetReference(), ToolbarButtonSupportId)
 {
 #ifdef DEBUG_UI_LOGS
@@ -580,6 +583,22 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return new JS::Value(RotateHelper::RandomizeSelectedAngles());
 		}));
 
+	// --- Randomizer functions ---
+	jsACAPI->AddItem(new JS::Function("RandomizeWidth", [](GS::Ref<JS::Base> param) {
+		double percent = GetDoubleFromJs(param, 0.0);
+		return new JS::Value(RandomizerHelper::RandomizeWidth(percent));
+		}));
+
+	jsACAPI->AddItem(new JS::Function("RandomizeLength", [](GS::Ref<JS::Base> param) {
+		double percent = GetDoubleFromJs(param, 0.0);
+		return new JS::Value(RandomizerHelper::RandomizeLength(percent));
+		}));
+
+	jsACAPI->AddItem(new JS::Function("RandomizeHeight", [](GS::Ref<JS::Base> param) {
+		double percent = GetDoubleFromJs(param, 0.0);
+		return new JS::Value(RandomizerHelper::RandomizeHeight(percent));
+		}));
+
 	jsACAPI->AddItem(new JS::Function("OrientObjectsToPoint", [](GS::Ref<JS::Base>) {
 		// if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] OrientObjectsToPoint()");
 		return new JS::Value(RotateHelper::OrientObjectsToPoint());
@@ -777,6 +796,14 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		ACAPI_WriteReport("[OpenSelectionDetailsPalette] request", false);
 #endif
 		SelectionDetailsPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenRandomizerPalette", [](GS::Ref<JS::Base>) {
+#ifdef DEBUG_UI_LOGS
+		ACAPI_WriteReport("[OpenRandomizerPalette] request", false);
+#endif
+		RandomizerPalette::ShowPalette();
 		return new JS::Value(true);
 		}));
 
@@ -1043,6 +1070,9 @@ void BrowserRepl::ButtonClicked(const DG::ButtonClickEvent& ev)
 			break;
 		case ToolbarButtonCSVId:
 			SendXlsPalette::ShowPalette();
+			break;
+		case ToolbarButtonRandomizerId:
+			RandomizerPalette::ShowPalette();
 			break;
 		case ToolbarButtonSupportId:
 			HelpPalette::ShowWithURL("https://landscape.227.info/help");

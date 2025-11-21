@@ -23,6 +23,7 @@
 #include    "AnglePalette.hpp"
 #include    "SendXlsPalette.hpp"
 #include    "SelectionDetailsPalette.hpp"
+#include    "RandomizerPalette.hpp"
 
 // -----------------------------------------------------------------------------
 // Show or Hide Browser Palette
@@ -30,18 +31,26 @@
 
 static void	ShowOrHideBrowserRepl ()
 {
+#ifdef DEBUG_UI_LOGS
 	ACAPI_WriteReport("[Main] ShowOrHideBrowserRepl called", false);
+#endif
 	
 	if (!BrowserRepl::HasInstance ()) {
+#ifdef DEBUG_UI_LOGS
 		ACAPI_WriteReport("[Main] Creating BrowserRepl instance", false);
+#endif
 		BrowserRepl::CreateInstance ();
 	}
 	
 	if (BrowserRepl::GetInstance ().IsVisible ()) {
+#ifdef DEBUG_UI_LOGS
 		ACAPI_WriteReport("[Main] Hiding BrowserRepl", false);
+#endif
 		BrowserRepl::GetInstance ().Hide ();
 	} else {
+#ifdef DEBUG_UI_LOGS
 		ACAPI_WriteReport("[Main] Showing BrowserRepl", false);
+#endif
 		BrowserRepl::GetInstance ().Show ();
 	}
 }
@@ -53,23 +62,31 @@ static void	ShowOrHideBrowserRepl ()
 
 GSErrCode __ACENV_CALL MenuCommandHandler (const API_MenuParams *menuParams)
 {
+#ifdef DEBUG_UI_LOGS
 	ACAPI_WriteReport("[Main] MenuCommandHandler: menuResID=%d, itemIndex=%d", false, 
 		(int)menuParams->menuItemRef.menuResID, (int)menuParams->menuItemRef.itemIndex);
+#endif
 	
 	switch (menuParams->menuItemRef.menuResID) {
 		case BrowserReplMenuResId:
 			switch (menuParams->menuItemRef.itemIndex) {
 				case BrowserReplMenuItemIndex:  // "Toolbar" - opens palette 32500
+#ifdef DEBUG_UI_LOGS
 					ACAPI_WriteReport("[Main] Handling Toolbar menu item", false);
+#endif
 					ShowOrHideBrowserRepl ();
 					break;
 				default:
+#ifdef DEBUG_UI_LOGS
 					ACAPI_WriteReport("[Main] Unknown menu item index: %d", false, (int)menuParams->menuItemRef.itemIndex);
+#endif
 					break;
 			}
 			break;
 		default:
+#ifdef DEBUG_UI_LOGS
 			ACAPI_WriteReport("[Main] Unknown menuResID: %d", false, (int)menuParams->menuItemRef.menuResID);
+#endif
 			break;
 	}
 
@@ -139,6 +156,7 @@ GSErrCode __ACENV_CALL Initialize ()
     palErr |= AnglePalette::RegisterPaletteControlCallBack ();
 	palErr |= SendXlsPalette::RegisterPaletteControlCallBack ();
 	palErr |= SelectionDetailsPalette::RegisterPaletteControlCallBack ();
+	palErr |= RandomizerPalette::RegisterPaletteControlCallBack ();
 
     if (DBERROR (palErr != NoError))
         return palErr;

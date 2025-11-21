@@ -53,6 +53,10 @@
 	"Selection_Details_Palette.html"
 }
 
+'DATA' 210 "Randomizer Palette Html" {
+	"Randomizer_Palette.html"
+}
+
 /* Icons for native toolbar buttons */
 'GICN' 32100 "Table Icon" {
 	"Table"
@@ -92,6 +96,10 @@
 
 'GICN' 32109 "CSV Icon" {
 	"CSV"
+}
+
+'GICN' 32112 "Randomizer Icon" {
+	"Random"
 }
 
 'GICN' 32110 "Support Icon" {
