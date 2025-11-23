@@ -246,9 +246,12 @@
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\MeshPalette.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\OrientationPalette.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\PropertyUtils.hpp" />
+    <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerHelper.hpp" />
+    <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerPalette.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\ResourceIDs.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RoadHelper.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RotateHelper.hpp" />
+    <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionDetailsPalette.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionHelper.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionMetricsHelper.hpp" />
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionPropertyHelper.hpp" />
@@ -280,8 +283,11 @@
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\MeshPalette.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\OrientationPalette.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\PropertyUtils.cpp" />
+    <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerHelper.cpp" />
+    <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerPalette.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RoadHelper.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RotateHelper.cpp" />
+    <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionDetailsPalette.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionHelper.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionMetricsHelper.cpp" />
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionPropertyHelper.cpp" />

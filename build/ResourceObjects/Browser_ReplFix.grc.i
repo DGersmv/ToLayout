@@ -147,3 +147,64 @@
 'DATA' 190 "Send to Excel Palette Html" {
 	"Send_Xls_Palette.html"
 }
+
+'DATA' 200 "Selection Details Palette Html" {
+	"Selection_Details_Palette.html"
+}
+
+'DATA' 210 "Randomizer Palette Html" {
+	"Randomizer_Palette.html"
+}
+
+
+'GICN' 32100 "Table Icon" {
+	"Table"
+}
+
+'GICN' 32101 "Spline Icon" {
+	"Spline"
+}
+
+'GICN' 32102 "Rotate Icon" {
+	"Rotate"
+}
+
+'GICN' 32103 "RotSurf Icon" {
+	"RotSurf"
+}
+
+'GICN' 32104 "Land Icon" {
+	"Land"
+}
+
+'GICN' 32105 "Dims Icon" {
+	"Dims"
+}
+
+'GICN' 32106 "Layers Icon" {
+	"Layers"
+}
+
+'GICN' 32107 "Contour Icon" {
+	"Contour"
+}
+
+'GICN' 32108 "Mesh Icon" {
+	"Mesh"
+}
+
+'GICN' 32109 "CSV Icon" {
+	"CSV"
+}
+
+'GICN' 32112 "Randomizer Icon" {
+	"Random"
+}
+
+'GICN' 32110 "Support Icon" {
+	"Support"
+}
+
+'GICN' 32111 "Close Icon" {
+	"Close"
+}

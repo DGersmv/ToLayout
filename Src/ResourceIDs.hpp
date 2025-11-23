@@ -3,7 +3,7 @@
 
 #define BrowserReplResId        32500
 #define BrowserReplMenuResId    32501
-#define BrowserReplMenuItemIndex 1  // "Toolbar" item in menu (index 1 in STR# 32501)
+#define BrowserReplMenuItemIndex 13  // "Toolbar" item in menu (index 13 in STR# 32501)
 
 // Icon button IDs for native toolbar (IDs start from 1 in .grc)
 #define ToolbarButtonCloseId    1

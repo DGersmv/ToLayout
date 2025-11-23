@@ -18,11 +18,53 @@
     <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RINT\Browser_Repl.grc">
       <Filter>Resources</Filter>
     </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\CSV_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Close_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Contour_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Dims_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Land_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Layers_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Mesh_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Random_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\RotSurf_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Rotate_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Spline_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Support_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
+    <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\RFIX\Images\Table_28x28.svg">
+      <Filter>Images</Filter>
+    </None>
     <None Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\build\CMakeFiles\AddOnResources" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CMake Rules">
       <UniqueIdentifier>{EC91F525-DEAA-3781-8999-D13124613597}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Images">
+      <UniqueIdentifier>{B42B6F6B-1608-3B61-B85D-CD84020E9623}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resources">
       <UniqueIdentifier>{4029F956-0A8A-3FA8-A774-E9198A897DE4}</UniqueIdentifier>

@@ -64,10 +64,19 @@
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\PropertyUtils.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerHelper.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerPalette.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RoadHelper.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RotateHelper.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionDetailsPalette.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionHelper.cpp">
@@ -153,6 +162,12 @@
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\PropertyUtils.hpp">
       <Filter>Sources</Filter>
     </ClInclude>
+    <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerHelper.hpp">
+      <Filter>Sources</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RandomizerPalette.hpp">
+      <Filter>Sources</Filter>
+    </ClInclude>
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\ResourceIDs.hpp">
       <Filter>Sources</Filter>
     </ClInclude>
@@ -160,6 +175,9 @@
       <Filter>Sources</Filter>
     </ClInclude>
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\RotateHelper.hpp">
+      <Filter>Sources</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionDetailsPalette.hpp">
       <Filter>Sources</Filter>
     </ClInclude>
     <ClInclude Include="C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int\Src\SelectionHelper.hpp">
