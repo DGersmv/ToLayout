@@ -70,11 +70,83 @@ GSErrCode __ACENV_CALL MenuCommandHandler (const API_MenuParams *menuParams)
 	switch (menuParams->menuItemRef.menuResID) {
 		case BrowserReplMenuResId:
 			switch (menuParams->menuItemRef.itemIndex) {
-				case BrowserReplMenuItemIndex:  // "Toolbar" - opens palette 32500
+				case 1:  // "Selection Details"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Selection Details menu item", false);
+#endif
+					SelectionDetailsPalette::ShowPalette();
+					break;
+				case 2:  // "Distribution"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Distribution menu item", false);
+#endif
+					DistributionPalette::ShowPalette();
+					break;
+				case 3:  // "Orientation"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Orientation menu item", false);
+#endif
+					OrientationPalette::ShowPalette();
+					break;
+				case 4:  // "Angle"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Angle menu item", false);
+#endif
+					AnglePalette::ShowPalette();
+					break;
+				case 5:  // "Ground"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Ground menu item", false);
+#endif
+					GroundPalette::ShowPalette();
+					break;
+				case 6:  // "Markup"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Markup menu item", false);
+#endif
+					MarkupPalette::ShowPalette();
+					break;
+				case 7:  // "ID & Layers"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling ID & Layers menu item", false);
+#endif
+					IdLayersPalette::ShowPalette();
+					break;
+				case 8:  // "Contour"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Contour menu item", false);
+#endif
+					ContourPalette::ShowPalette();
+					break;
+				case 9:  // "Mesh"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Mesh menu item", false);
+#endif
+					MeshPalette::ShowPalette();
+					break;
+				case 10:  // "Send to Excel"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Send to Excel menu item", false);
+#endif
+					SendXlsPalette::ShowPalette();
+					break;
+				case 11:  // "Randomizer"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Randomizer menu item", false);
+#endif
+					RandomizerPalette::ShowPalette();
+					break;
+				case 12:  // "Support"
+#ifdef DEBUG_UI_LOGS
+					ACAPI_WriteReport("[Main] Handling Support menu item", false);
+#endif
+					HelpPalette::ShowWithURL("https://landscape.227.info/help");
+					break;
+				case BrowserReplMenuItemIndex:  // "Toolbar" - opens/closes palette 32500
 #ifdef DEBUG_UI_LOGS
 					ACAPI_WriteReport("[Main] Handling Toolbar menu item", false);
 #endif
-					ShowOrHideBrowserRepl ();
+					ShowOrHideBrowserRepl();
 					break;
 				default:
 #ifdef DEBUG_UI_LOGS
