@@ -58,6 +58,37 @@
       padding: 4px 6px;
       font-weight: 600;
     }
+    table.selection-table thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      padding-right: 18px;
+    }
+    table.selection-table thead th.sortable:hover {
+      background: #cac7c2;
+    }
+    table.selection-table thead th.sortable::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      opacity: 0.3;
+    }
+    table.selection-table thead th.sortable.sort-asc::after {
+      border-bottom: 6px solid #2f2f2f;
+      border-top: none;
+      opacity: 1;
+    }
+    table.selection-table thead th.sortable.sort-desc::after {
+      border-top: 6px solid #2f2f2f;
+      border-bottom: none;
+      opacity: 1;
+    }
     table.selection-table tbody td {
       border: 1px solid #c8c4c0;
       padding: 4px 6px;
@@ -162,6 +193,95 @@
       return div.innerHTML;
     }
 
+    // =============== sorting ===============
+    // Состояние сортировки
+    let sortColumn = null; // 'type', 'id', 'layer' или null
+    let sortDirection = 'asc'; // 'asc' или 'desc'
+    function sortGroupData(groupKeys) {
+      if (!sortColumn) {
+        return groupKeys; // Без сортировки возвращаем исходный порядок
+      }
+      
+      const sorted = groupKeys.slice().sort((keyA, keyB) => {
+        const groupA = groupDataMap[keyA];
+        const groupB = groupDataMap[keyB];
+        
+        let valueA, valueB;
+        if (sortColumn === 'type') {
+          valueA = (groupA.type || '').toLowerCase();
+          valueB = (groupB.type || '').toLowerCase();
+        } else if (sortColumn === 'id') {
+          valueA = (groupA.id || '').toLowerCase();
+          valueB = (groupB.id || '').toLowerCase();
+        } else if (sortColumn === 'layer') {
+          valueA = (groupA.layer || '').toLowerCase();
+          valueB = (groupB.layer || '').toLowerCase();
+        } else {
+          return 0;
+        }
+        
+        // Сравнение строк
+        let comparison = 0;
+        if (valueA < valueB) {
+          comparison = -1;
+        } else if (valueA > valueB) {
+          comparison = 1;
+        }
+        
+        // Применяем направление сортировки
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+      
+      return sorted;
+    }
+
+    function handleColumnSort(column) {
+      if (sortColumn === column) {
+        // Переключаем направление сортировки
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        // Устанавливаем новый столбец и направление по умолчанию
+        sortColumn = column;
+        sortDirection = 'asc';
+      }
+      
+      // Обновляем визуальные индикаторы сортировки
+      updateSortIndicators();
+      
+      // Перерисовываем таблицу
+      UpdateSelectedElements();
+    }
+
+    function updateSortIndicators() {
+      // Убираем все классы сортировки
+      const headers = document.querySelectorAll('table.selection-table thead th.sortable');
+      headers.forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+      });
+      
+      // Добавляем класс для активного столбца
+      if (sortColumn) {
+        let headerIndex;
+        if (sortColumn === 'type') {
+          headerIndex = 1; // Тип - второй столбец (после чекбокса)
+        } else if (sortColumn === 'id') {
+          headerIndex = 2; // ID - третий столбец
+        } else if (sortColumn === 'layer') {
+          headerIndex = 3; // Слой - четвертый столбец
+        }
+        
+        if (headerIndex !== undefined) {
+          const headerRow = document.querySelector('table.selection-table thead tr:last-child');
+          if (headerRow) {
+            const header = headerRow.children[headerIndex];
+            if (header) {
+              header.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+          }
+        }
+      }
+    }
+
     // =============== selection table ===============
     // Модель данных: groupKey -> Array<GUID>
     let groupDataMap = {}; // groupKey -> { guids: Array<GUID>, type, id, layer, count }
@@ -233,8 +353,12 @@
             });
           }
           
+          // Применяем сортировку
+          const groupKeys = Object.keys(groupDataMap);
+          const sortedKeys = sortGroupData(groupKeys);
+          
           // Формируем HTML строк
-          for (const groupKey of Object.keys(groupDataMap)) {
+          for (const groupKey of sortedKeys) {
             const group = groupDataMap[groupKey];
             const isChecked = group.guids.every(guid => selectedGuids.has(guid));
             html += '<tr data-group="' + escapeHtml(groupKey) + '">' +
@@ -249,6 +373,9 @@
         
         // Одна операция DOM вместо множества
         selectionTable.innerHTML = html;
+        
+        // Обновляем индикаторы сортировки
+        updateSortIndicators();
         
         // Обновляем состояние чекбокса "выбрать всё"
         updateSelectAllCheckbox();
@@ -405,16 +532,32 @@
       UpdateSelectedElements();
     });
 
-    // Обработчик для кнопки справки
-    document.addEventListener('DOMContentLoaded', function() {
-      const helpButton = document.querySelector('.help-button');
-      if (helpButton) {
-        helpButton.addEventListener('click', function() {
-          const url = this.getAttribute('data-help-url');
-          if (url && window.ACAPI && window.ACAPI.OpenHelpURL) {
-            window.ACAPI.OpenHelpURL(url);
-          }
-        });
+    // Обработчик для кнопки справки (делегирование событий)
+    document.addEventListener('click', function(e) {
+      const el = e.target.closest('[data-help-url]');
+      if (!el) return;
+      e.preventDefault();
+      
+      let url = el.getAttribute('data-help-url') || 'https://landscape.227.info/help/start';
+      const separator = url.includes('?') ? '&' : '?';
+      const timestamp = Date.now();
+      url = url + separator + 'v=' + timestamp;
+      
+      const A = window.ACAPI;
+      if (A && typeof A.OpenHelp === 'function') {
+        Promise
+          .resolve(A.OpenHelp(url))
+          .then(() => {
+            // Успешно открыто
+          })
+          .catch(err => {
+            console.log('[UI] ACAPI.OpenHelp error: ' + err);
+            // Fallback на window.open если ошибка
+            window.open(url, '_blank', 'noopener,noreferrer');
+          });
+      } else {
+        // Fallback если ACAPI недоступен
+        window.open(url, '_blank', 'noopener,noreferrer');
       }
     });
   </script>
@@ -434,9 +577,9 @@
           </tr>
           <tr>
             <th><input type="checkbox" id="select-all-checkbox" title="Выбрать/снять всё" onchange="handleSelectAllCheckboxChange()"></th>
-            <th>Тип</th>
-            <th>ID</th>
-            <th>Слой</th>
+            <th class="sortable" onclick="handleColumnSort('type')" title="Сортировать по типу">Тип</th>
+            <th class="sortable" onclick="handleColumnSort('id')" title="Сортировать по ID">ID</th>
+            <th class="sortable" onclick="handleColumnSort('layer')" title="Сортировать по слою">Слой</th>
             <th>Кол-во</th>
           </tr>
         </thead>

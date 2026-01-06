@@ -25,6 +25,7 @@
 #include    "SelectionDetailsPalette.hpp"
 #include    "RandomizerPalette.hpp"
 #include    "LicenseManager.hpp"
+#include	"APICommon.h"
 
 // -----------------------------------------------------------------------------
 // Show or Hide Browser Palette
@@ -61,12 +62,28 @@ static void	ShowOrHideBrowserRepl ()
 //		called to perform the user-asked command
 // -----------------------------------------------------------------------------
 
+// Глобальная переменная для хранения состояния лицензии/демо
+static bool g_isLicenseValid = false;
+static bool g_isDemoExpired = false;
+
 GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 {
 #ifdef DEBUG_UI_LOGS
 	ACAPI_WriteReport("[Main] MenuCommandHandler: menuResID=%d, itemIndex=%d", false, 
 		(int)menuParams->menuItemRef.menuResID, (int)menuParams->menuItemRef.itemIndex);
 #endif
+	
+	// Проверяем лицензию/демо перед выполнением команд (кроме Support и Toolbar)
+	if (!g_isLicenseValid && g_isDemoExpired) {
+		short itemIndex = menuParams->menuItemRef.itemIndex;
+		// Разрешаем только Support (12) и Toolbar (BrowserReplMenuItemIndex)
+		if (itemIndex != 12 && itemIndex != BrowserReplMenuItemIndex) {
+			GS::UniString macAddress = LicenseManager::GetComputerId();
+			GS::UniString supportUrl = GS::UniString("https://landscape.227.info/license?mac=") + macAddress;
+			ACAPI_WriteReport("Demo period expired. Please purchase a license.", true);
+			return NoError;
+		}
+	}
 	
 	switch (menuParams->menuItemRef.menuResID) {
 		case BrowserReplMenuResId:
@@ -138,10 +155,18 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 					RandomizerPalette::ShowPalette();
 					break;
 				case 12:  // "Support"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Support menu item", false);
-#endif
-					HelpPalette::ShowWithURL("https://landscape.227.info/help");
+					{
+						GS::UniString macAddress = LicenseManager::GetComputerId();
+						GS::UniString url = GS::UniString("https://landscape.227.info/license?mac=") + macAddress;
+						
+						// Логируем для отладки
+						ACAPI_WriteReport("[Main] Support clicked, MAC: ", false);
+						ACAPI_WriteReport(macAddress.ToCStr().Get(), false);
+						ACAPI_WriteReport("[Main] URL: ", false);
+						ACAPI_WriteReport(url.ToCStr().Get(), false);
+						
+						HelpPalette::ShowWithURL(url);
+					}
 					break;
 				case BrowserReplMenuItemIndex:  // "Toolbar" - opens/closes palette 32500
 #ifdef DEBUG_UI_LOGS
@@ -211,31 +236,48 @@ GSErrCode Initialize ()
     LicenseManager::LicenseData licenseData;
     LicenseManager::LicenseStatus licenseStatus = LicenseManager::CheckLicense(licenseData);
     
-    if (licenseStatus != LicenseManager::LicenseStatus::Valid) {
-        GS::UniString errorMsg;
-        switch (licenseStatus) {
-            case LicenseManager::LicenseStatus::NotFound:
-                errorMsg = "License file not found. Please place license.lic file next to the plugin.";
-                break;
-            case LicenseManager::LicenseStatus::Expired:
-                errorMsg = "License expired. Valid until: " + licenseData.validUntil;
-                break;
-            case LicenseManager::LicenseStatus::ComputerMismatch:
-                errorMsg = "License is not valid for this computer. Computer ID: " + LicenseManager::GetComputerId();
-                break;
-            case LicenseManager::LicenseStatus::PluginMismatch:
-                errorMsg = "License is not valid for this plugin.";
-                break;
-            case LicenseManager::LicenseStatus::ParseError:
-                errorMsg = "License file format error. Please check license.lic file.";
-                break;
-            default:
-                errorMsg = "License validation failed.";
-                break;
-        }
+    bool isLicenseValid = (licenseStatus == LicenseManager::LicenseStatus::Valid);
+    bool isDemoActive = false;
+    bool isDemoExpired = false;
+    
+    if (!isLicenseValid) {
+        // Если лицензии нет, проверяем демо-режим
+        LicenseManager::DemoData demoData;
+        isDemoActive = LicenseManager::CheckDemoPeriod(demoData);
         
-        ACAPI_WriteReport(errorMsg.ToCStr().Get(), true);
-        return APIERR_GENERAL;
+        if (isDemoActive) {
+            // Демо активен, обновляем счетчик запусков
+            LicenseManager::UpdateDemoData();
+        } else {
+            // Демо истек
+            isDemoExpired = true;
+        }
+    }
+    
+    // Сохраняем состояние для использования в MenuCommandHandler
+    g_isLicenseValid = isLicenseValid;
+    g_isDemoExpired = isDemoExpired;
+    
+    // Если ни лицензия, ни демо не активны - отключаем меню (кроме Support и Toolbar)
+    if (!isLicenseValid && isDemoExpired) {
+        // Отключаем все пункты меню кроме Support (12) и Toolbar (BrowserReplMenuItemIndex)
+        DisableEnableMenuItem(BrowserReplMenuResId, 1, true);   // Selection Details
+        DisableEnableMenuItem(BrowserReplMenuResId, 2, true);   // Distribution
+        DisableEnableMenuItem(BrowserReplMenuResId, 3, true);   // Orientation
+        DisableEnableMenuItem(BrowserReplMenuResId, 4, true);   // Angle
+        DisableEnableMenuItem(BrowserReplMenuResId, 5, true);   // Ground
+        DisableEnableMenuItem(BrowserReplMenuResId, 6, true);   // Markup
+        DisableEnableMenuItem(BrowserReplMenuResId, 7, true);   // ID & Layers
+        DisableEnableMenuItem(BrowserReplMenuResId, 8, true);   // Contour
+        DisableEnableMenuItem(BrowserReplMenuResId, 9, true);   // Mesh
+        DisableEnableMenuItem(BrowserReplMenuResId, 10, true);   // Send to Excel
+        DisableEnableMenuItem(BrowserReplMenuResId, 11, true);  // Randomizer
+        // Support (12) и Toolbar (BrowserReplMenuItemIndex) остаются активными
+        
+        GS::UniString macAddress = LicenseManager::GetComputerId();
+        GS::UniString supportUrl = GS::UniString("https://landscape.227.info/license?mac=") + macAddress;
+        ACAPI_WriteReport("Demo period expired. Please purchase a license. Support: ", false);
+        ACAPI_WriteReport(supportUrl.ToCStr().Get(), false);
     }
 
     // 1) Меню
