@@ -7,7 +7,7 @@
 
 ### Шаг 2: Перейдите в папку проекта
 ```bash
-cd "C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int"
+cd "C:\Program Files\Graphisoft\API.Development.Kit.WIN.29.3100\Examples\Browser_Repl_Int"
 ```
 **В офисе замените на ваш путь!**
 
@@ -22,7 +22,7 @@ cmake --build build --config Debug
 ```
 
 ### Шаг 5: Готово!
-Файл будет здесь: `ToArchicad\Debug\Browser_Repl_Int.apx`
+Файл будет здесь: `ToArchicad\Debug\Browser_Repl_Int.apx` (Debug) или `ToArchicad\Release\LandscapeHelper_AC29.apx` (Release)
 
 ---
 
@@ -33,7 +33,7 @@ cmake --build build --config Debug
 
 ### Шаг 2: Перейдите в папку проекта
 ```bash
-cd "C:\Program Files\Graphisoft\API Development Kit 27.6003\Examples\Browser_Repl_Int"
+cd "C:\Program Files\Graphisoft\API.Development.Kit.WIN.29.3100\Examples\Browser_Repl_Int"
 ```
 **В офисе замените на ваш путь!**
 
@@ -48,7 +48,7 @@ cmake --build build --config Release
 ```
 
 ### Шаг 5: Готово!
-Файл будет здесь: `ToArchicad\Release\Browser_Repl_Int.apx`
+Файл будет здесь: `ToArchicad\Release\LandscapeHelper_AC29.apx`
 
 ---
 

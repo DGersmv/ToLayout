@@ -21,7 +21,7 @@ static GS::UniString LoadGroundHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL GroundPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode GroundPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

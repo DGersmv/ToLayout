@@ -22,7 +22,7 @@ static GS::UniString LoadSelectionDetailsHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL SelectionDetailsPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode SelectionDetailsPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:
@@ -191,7 +191,7 @@ void SelectionDetailsPalette::PanelCloseRequested(const DG::PanelCloseRequestEve
 }
 
 // -------------------- Selection Change Handler --------------------
-GSErrCode __ACENV_CALL SelectionDetailsPalette::SelectionChangeHandler(const API_Neig* neig)
+GSErrCode SelectionDetailsPalette::SelectionChangeHandler(const API_Neig* neig)
 {
 	(void)neig; // unused parameter
 	if (SelectionDetailsPalette::HasInstance())

@@ -27,7 +27,7 @@ public:
     void Show();
     void Hide();
 
-    static GSErrCode __ACENV_CALL PaletteControlCallBack(Int32 referenceID, API_PaletteMessageID messageID, GS::IntPtr param);
+    static GSErrCode PaletteControlCallBack(Int32 referenceID, API_PaletteMessageID messageID, GS::IntPtr param);
     static GSErrCode RegisterPaletteControlCallBack();
     
     // JavaScript API registration - still needed for other palettes

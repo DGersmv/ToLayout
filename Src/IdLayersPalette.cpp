@@ -22,7 +22,7 @@ static GS::UniString LoadIdLayersHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL IdLayersPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode IdLayersPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

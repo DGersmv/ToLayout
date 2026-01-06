@@ -21,7 +21,7 @@ static GS::UniString LoadContourHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL ContourPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode ContourPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

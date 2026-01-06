@@ -24,6 +24,7 @@
 #include    "SendXlsPalette.hpp"
 #include    "SelectionDetailsPalette.hpp"
 #include    "RandomizerPalette.hpp"
+#include    "LicenseManager.hpp"
 
 // -----------------------------------------------------------------------------
 // Show or Hide Browser Palette
@@ -60,7 +61,7 @@ static void	ShowOrHideBrowserRepl ()
 //		called to perform the user-asked command
 // -----------------------------------------------------------------------------
 
-GSErrCode __ACENV_CALL MenuCommandHandler (const API_MenuParams *menuParams)
+GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 {
 #ifdef DEBUG_UI_LOGS
 	ACAPI_WriteReport("[Main] MenuCommandHandler: menuResID=%d, itemIndex=%d", false, 
@@ -176,7 +177,7 @@ GSErrCode __ACENV_CALL MenuCommandHandler (const API_MenuParams *menuParams)
 // Dependency definitions
 // -----------------------------------------------------------------------------
 
-API_AddonType	__ACDLL_CALL	CheckEnvironment (API_EnvirParams* envir)
+API_AddonType	CheckEnvironment (API_EnvirParams* envir)
 {
 	RSGetIndString (&envir->addOnInfo.name, 32000, 1, ACAPI_GetOwnResModule ());
 	RSGetIndString (&envir->addOnInfo.description, 32000, 2, ACAPI_GetOwnResModule ());
@@ -189,7 +190,7 @@ API_AddonType	__ACDLL_CALL	CheckEnvironment (API_EnvirParams* envir)
 // Interface definitions
 // -----------------------------------------------------------------------------
 
-GSErrCode	__ACDLL_CALL	RegisterInterface (void)
+GSErrCode	RegisterInterface (void)
 {
 	GSErrCode err = ACAPI_MenuItem_RegisterMenu (BrowserReplMenuResId, 0, MenuCode_UserDef, MenuFlag_Default);
 	if (DBERROR (err != NoError))
@@ -204,8 +205,39 @@ GSErrCode	__ACDLL_CALL	RegisterInterface (void)
 //		called after the Add-On has been loaded into memory
 // -----------------------------------------------------------------------------
 
-GSErrCode __ACENV_CALL Initialize ()
+GSErrCode Initialize ()
 {
+    // 0) Проверка лицензии
+    LicenseManager::LicenseData licenseData;
+    LicenseManager::LicenseStatus licenseStatus = LicenseManager::CheckLicense(licenseData);
+    
+    if (licenseStatus != LicenseManager::LicenseStatus::Valid) {
+        GS::UniString errorMsg;
+        switch (licenseStatus) {
+            case LicenseManager::LicenseStatus::NotFound:
+                errorMsg = "License file not found. Please place license.lic file next to the plugin.";
+                break;
+            case LicenseManager::LicenseStatus::Expired:
+                errorMsg = "License expired. Valid until: " + licenseData.validUntil;
+                break;
+            case LicenseManager::LicenseStatus::ComputerMismatch:
+                errorMsg = "License is not valid for this computer. Computer ID: " + LicenseManager::GetComputerId();
+                break;
+            case LicenseManager::LicenseStatus::PluginMismatch:
+                errorMsg = "License is not valid for this plugin.";
+                break;
+            case LicenseManager::LicenseStatus::ParseError:
+                errorMsg = "License file format error. Please check license.lic file.";
+                break;
+            default:
+                errorMsg = "License validation failed.";
+                break;
+        }
+        
+        ACAPI_WriteReport(errorMsg.ToCStr().Get(), true);
+        return APIERR_GENERAL;
+    }
+
     // 1) Меню
     GSErrCode err = ACAPI_MenuItem_InstallMenuHandler (BrowserReplMenuResId, MenuCommandHandler);
     if (DBERROR (err != NoError))
@@ -242,7 +274,7 @@ GSErrCode __ACENV_CALL Initialize ()
 //		called when the Add-On is going to be unloaded
 // -----------------------------------------------------------------------------
 
-GSErrCode __ACENV_CALL	FreeData (void)
+GSErrCode	FreeData (void)
 {
 	return NoError;
 }		// FreeData

@@ -3,8 +3,8 @@
 // ****************************************************************************/
 
 'STR#' 32000 "Add-on Name and Description" {
-/* [  1] */		"Landscape Helper AC27"
-/* [  2] */		"Landscape AC27 V2.0"
+/* [  1] */		"Landscape Helper AC29"
+/* [  2] */		"Landscape AC29 V2.0"
 }
 
 'STR#' 32501 "Strings for the Menu" {

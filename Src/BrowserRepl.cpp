@@ -196,7 +196,7 @@ static void EnsureModelWindowIsActive()
 }
 
 // --------------------- Project event handler ---------------------
-static GSErrCode __ACENV_CALL NotificationHandler(API_NotifyEventID notifID, Int32 /*param*/)
+static GSErrCode NotificationHandler(API_NotifyEventID notifID, Int32 /*param*/)
 {
 	if (notifID == APINotify_Quit) {
 #ifdef DEBUG_UI_LOGS
@@ -1113,7 +1113,7 @@ void BrowserRepl::PanelCloseRequested(const DG::PanelCloseRequestEvent&, bool* a
 
 // SelectionChangeHandler removed - not needed for toolbar
 
-GSErrCode __ACENV_CALL BrowserRepl::PaletteControlCallBack(Int32, API_PaletteMessageID messageID, GS::IntPtr param)
+GSErrCode BrowserRepl::PaletteControlCallBack(Int32, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 #ifdef DEBUG_UI_LOGS
 	switch (messageID) {

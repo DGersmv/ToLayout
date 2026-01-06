@@ -22,7 +22,7 @@ static GS::UniString LoadMeshHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL MeshPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode MeshPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

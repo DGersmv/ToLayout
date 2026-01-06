@@ -22,7 +22,7 @@ static GS::UniString LoadAngleHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL AnglePaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode AnglePaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

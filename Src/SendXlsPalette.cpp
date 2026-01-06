@@ -22,7 +22,7 @@ static GS::UniString LoadSendXlsHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL SendXlsPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode SendXlsPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

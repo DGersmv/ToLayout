@@ -9,7 +9,7 @@
 #include "DGBrowser.hpp"
 
 // ------------ file-local palette callback (НЕ член класса) ------------
-static GSErrCode __ACENV_CALL HelpPalette_CB(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode HelpPalette_CB(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

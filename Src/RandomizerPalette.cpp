@@ -22,7 +22,7 @@ static GS::UniString LoadRandomizerHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL RandomizerPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode RandomizerPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

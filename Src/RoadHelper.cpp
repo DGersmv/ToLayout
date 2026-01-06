@@ -1398,25 +1398,16 @@ namespace RoadHelper {
         element.text.anchor = APIAnc_LB; // Left Bottom - горизонтальная ориентация
         element.text.width = 100.0; // Фиксированная ширина для горизонтального текста
         element.text.nonBreaking = true; // Без переноса строк
-        element.text.charCode = CC_Legacy; // Используем Legacy кодировку для простоты
         
-        // Формируем текст с площадью (используем простой текст)
+        // Формируем текст с площадью (используем UniString для AC29)
         char textBuf[256];
         snprintf(textBuf, sizeof(textBuf), "S = %.2f m2", areaM2);
         
         API_ElementMemo memo = {};
         BNZeroMemory(&memo, sizeof(API_ElementMemo));
         
-        // Выделяем память для текста (Legacy)
-        const UInt32 textLen = (UInt32)strlen(textBuf);
-        memo.textContent = BMhAll((GSSize)textLen + 1);
-        if (memo.textContent == nullptr) {
-            Log("[RoadHelper] ERROR: Failed to allocate memory for text content");
-            return false;
-        }
-        
-        // Копируем текст
-        strcpy(*memo.textContent, textBuf);
+        // В AC29 textContent это GS::UniString*
+        memo.textContent = new GS::UniString { textBuf };
         
         // Создаем текстовый элемент
         err = ACAPI_CallUndoableCommand("Create Area Label", [&]() -> GSErrCode {

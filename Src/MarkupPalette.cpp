@@ -21,7 +21,7 @@ static GS::UniString LoadMarkupHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL MarkupPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode MarkupPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:

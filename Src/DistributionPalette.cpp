@@ -22,7 +22,7 @@ static GS::UniString LoadDistributionHtml()
 	return html;
 }
 
-static GSErrCode __ACENV_CALL DistributionPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
+static GSErrCode DistributionPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
 	case APIPalMsg_OpenPalette:
