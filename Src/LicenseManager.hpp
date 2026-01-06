@@ -29,6 +29,13 @@ public:
 		GS::UniString licenseKey;
 	};
 
+	// Структура с данными демо-режима
+	struct DemoData {
+		GS::UniString firstLaunchDate;  // Формат: YYYY-MM-DD
+		GS::UniString lastLaunchDate;    // Формат: YYYY-MM-DD
+		int launchCount;                 // Количество запусков
+	};
+
 	// Проверить лицензию (главная функция)
 	// Возвращает LicenseStatus и заполняет licenseData если лицензия найдена
 	static LicenseStatus CheckLicense(LicenseData& licenseData);
@@ -41,6 +48,19 @@ public:
 
 	// Записать лог проверки лицензии
 	static void WriteLicenseLog(LicenseStatus status, const LicenseData& licenseData);
+	
+	// Записать общий лог в файл (для отладки)
+	static void WriteLog(const GS::UniString& message);
+
+	// Демо-режим: проверить, активен ли демо-период (22 дня или 22 запуска)
+	// Возвращает true если демо активен, false если истек
+	static bool CheckDemoPeriod(DemoData& demoData);
+
+	// Демо-режим: обновить данные демо (увеличить счетчик запусков, обновить дату)
+	static void UpdateDemoData();
+
+	// Демо-режим: получить путь к файлу с демо-данными
+	static GS::UniString GetDemoFilePath();
 
 private:
 	// Получить путь к .apx файлу плагина

@@ -112,8 +112,14 @@ void HelpPalette::ShowWithURL(const GS::UniString& url)
 
 	GetInstance().Show();
 
-	if (!url.IsEmpty())
+	if (!url.IsEmpty()) {
+		// Логируем URL для отладки
+		ACAPI_WriteReport("[HelpPalette] Loading URL: ", false);
+		ACAPI_WriteReport(url.ToCStr().Get(), false);
 		GetInstance().SetURL(url);
+	} else {
+		ACAPI_WriteReport("[HelpPalette] Empty URL provided!", true);
+	}
 }
 
 void HelpPalette::HidePalette()
