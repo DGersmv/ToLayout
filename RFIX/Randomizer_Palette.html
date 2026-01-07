@@ -92,6 +92,13 @@
       line-height: 1.4;
       min-height: 32px;
     }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
   </style>
   <script>
     function addLog(msg) {
@@ -270,6 +277,23 @@
       window.addEventListener('focus', () => {
         whenACAPIReadyDo(refreshSelectionInfo);
       });
+
+      // Обработчик для кнопки справки (через data-help-url)
+      document.addEventListener('click', function (e) {
+        const el = e.target.closest('[data-help-url]');
+        if (!el) return;
+        e.preventDefault();
+        let url = el.getAttribute('data-help-url');
+        if (!url) return;
+        const separator = url.includes('?') ? '&' : '?';
+        url = url + separator + 'v=' + Date.now();
+        const api = window.ACAPI;
+        if (api && typeof api.OpenHelp === 'function') {
+          Promise.resolve(api.OpenHelp(url)).catch(err => console.log('[Randomizer] OpenHelp error:', err));
+        } else {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      }, { passive: false });
     });
   </script>
 </head>
@@ -312,6 +336,15 @@
     <div class="section">
       <div class="section-title">Рандомизация угла</div>
       <button class="button-flat button-inline button-primary" onclick="randomizeAngle()" style="width: 100%;">Случайный угол (0-360°)</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <div class="controls-row">
+        <span></span>
+        <button class="button-flat button-inline" data-help-url="https://landscape.227.info/help/randomizer">Справка</button>
+      </div>
     </div>
   </div>
 </body>
