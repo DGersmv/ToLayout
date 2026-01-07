@@ -2,9 +2,16 @@
 #include "APICommon.h"
 #include "BrowserRepl.hpp"
 #include "DGBrowser.hpp"
+#include "LicenseManager.hpp"
 
 #include <Windows.h>
 #include "SelectionHelper.hpp"
+
+// Внешние функции для проверки состояния лицензии
+extern "C" {
+	bool IsLicenseValid();
+	bool IsDemoExpired();
+}
 #include "RotateHelper.hpp"
 #include "LandscapeHelper.hpp"
 #include "GroundHelper.hpp"
@@ -1037,6 +1044,14 @@ void BrowserRepl::ButtonClicked(const DG::ButtonClickEvent& ev)
 	ACAPI_WriteReport("[BrowserRepl] ButtonClicked: id=%d", false, (int)buttonId);
 #endif
 
+	// Проверяем лицензию/демо перед выполнением команд (кроме Close и Support)
+	if (!IsLicenseValid() && IsDemoExpired()) {
+		if (buttonId != ToolbarButtonCloseId && buttonId != ToolbarButtonSupportId) {
+			ACAPI_WriteReport("Demo period expired. Please purchase a license.", true);
+			return;
+		}
+	}
+
 	switch (buttonId) {
 		case ToolbarButtonCloseId:
 			Hide();
@@ -1075,7 +1090,10 @@ void BrowserRepl::ButtonClicked(const DG::ButtonClickEvent& ev)
 			RandomizerPalette::ShowPalette();
 			break;
 		case ToolbarButtonSupportId:
-			HelpPalette::ShowWithURL("https://landscape.227.info/help");
+			{
+				GS::UniString url = LicenseManager::BuildLicenseUrl();
+				HelpPalette::ShowWithURL(url);
+			}
 			break;
 		default:
 			break;

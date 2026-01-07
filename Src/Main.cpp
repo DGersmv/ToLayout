@@ -66,6 +66,12 @@ static void	ShowOrHideBrowserRepl ()
 static bool g_isLicenseValid = false;
 static bool g_isDemoExpired = false;
 
+// Функции для проверки состояния лицензии из других модулей
+extern "C" {
+	bool IsLicenseValid() { return g_isLicenseValid; }
+	bool IsDemoExpired() { return g_isDemoExpired; }
+}
+
 GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 {
 #ifdef DEBUG_UI_LOGS
@@ -78,8 +84,6 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 		short itemIndex = menuParams->menuItemRef.itemIndex;
 		// Разрешаем только Support (12) и Toolbar (BrowserReplMenuItemIndex)
 		if (itemIndex != 12 && itemIndex != BrowserReplMenuItemIndex) {
-			GS::UniString macAddress = LicenseManager::GetComputerId();
-			GS::UniString supportUrl = GS::UniString("https://landscape.227.info/license?mac=") + macAddress;
 			ACAPI_WriteReport("Demo period expired. Please purchase a license.", true);
 			return NoError;
 		}
@@ -156,13 +160,10 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 					break;
 				case 12:  // "Support"
 					{
-						GS::UniString macAddress = LicenseManager::GetComputerId();
-						GS::UniString url = GS::UniString("https://landscape.227.info/license?mac=") + macAddress;
+						GS::UniString url = LicenseManager::BuildLicenseUrl();
 						
 						// Логируем для отладки
-						ACAPI_WriteReport("[Main] Support clicked, MAC: ", false);
-						ACAPI_WriteReport(macAddress.ToCStr().Get(), false);
-						ACAPI_WriteReport("[Main] URL: ", false);
+						ACAPI_WriteReport("[Main] Support clicked, URL: ", false);
 						ACAPI_WriteReport(url.ToCStr().Get(), false);
 						
 						HelpPalette::ShowWithURL(url);
@@ -274,8 +275,7 @@ GSErrCode Initialize ()
         DisableEnableMenuItem(BrowserReplMenuResId, 11, true);  // Randomizer
         // Support (12) и Toolbar (BrowserReplMenuItemIndex) остаются активными
         
-        GS::UniString macAddress = LicenseManager::GetComputerId();
-        GS::UniString supportUrl = GS::UniString("https://landscape.227.info/license?mac=") + macAddress;
+        GS::UniString supportUrl = LicenseManager::BuildLicenseUrl();
         ACAPI_WriteReport("Demo period expired. Please purchase a license. Support: ", false);
         ACAPI_WriteReport(supportUrl.ToCStr().Get(), false);
     }

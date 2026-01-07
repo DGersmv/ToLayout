@@ -43,7 +43,8 @@ public:
 	// Получить идентификатор текущего компьютера (MAC адрес)
 	static GS::UniString GetComputerId();
 
-	// Получить путь к файлу лицензии (рядом с .apx файлом)
+	// Получить путь к файлу лицензии (проверяет оба места: рядом с .apx и в AppData)
+	// Возвращает путь к найденному файлу или первый путь для проверки
 	static GS::UniString GetLicenseFilePath();
 
 	// Записать лог проверки лицензии
@@ -62,9 +63,27 @@ public:
 	// Демо-режим: получить путь к файлу с демо-данными
 	static GS::UniString GetDemoFilePath();
 
+	// Сформировать URL для страницы лицензии с данными о плагине из демо-файла
+	static GS::UniString BuildLicenseUrl();
+
 private:
 	// Получить путь к .apx файлу плагина
 	static GS::UniString GetAddonFilePath();
+	
+	// Получить путь к директории пользовательских данных (AppData\Local\LandscapeHelper)
+	static GS::UniString GetUserDataDirectory();
+	
+	// Работа с реестром: получить дату первого запуска
+	static GS::UniString GetFirstLaunchDateFromRegistry();
+	
+	// Работа с реестром: установить дату первого запуска
+	static void SetFirstLaunchDateToRegistry(const GS::UniString& date);
+	
+	// Работа с реестром: получить счетчик запусков
+	static int GetLaunchCountFromRegistry();
+	
+	// Работа с реестром: установить счетчик запусков
+	static void SetLaunchCountToRegistry(int count);
 
 	// Прочитать файл лицензии
 	static bool ReadLicenseFile(const GS::UniString& filePath, LicenseData& licenseData);
