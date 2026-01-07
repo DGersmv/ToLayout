@@ -950,6 +950,7 @@
         exportBtn.addEventListener('click', () => whenACAPIReadyDo(exportChosenToCsv));
       }
 
+
       whenACAPIReadyDo(() => {
         refreshSelection();
       });
@@ -1029,6 +1030,23 @@
         renderChosenTable();
       }
     });
+
+    // Обработчик для кнопки справки (через data-help-url)
+    document.addEventListener('click', function (e) {
+      const el = e.target.closest('[data-help-url]');
+      if (!el) return;
+      e.preventDefault();
+      let url = el.getAttribute('data-help-url');
+      if (!url) return;
+      const separator = url.includes('?') ? '&' : '?';
+      url = url + separator + 'v=' + Date.now();
+      const api = window.ACAPI;
+      if (api && typeof api.OpenHelp === 'function') {
+        Promise.resolve(api.OpenHelp(url)).catch(err => console.log('[SendXls] OpenHelp error:', err));
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }, { passive: false });
   </script>
 </head>
 
@@ -1173,7 +1191,7 @@
     <!-- Нижний блок: кнопки -->
     <div class="section">
       <div class="controls-row" style="justify-content: space-between;">
-        <button id="help-btn" class="button-flat">Справка</button>
+        <button id="help-btn" class="button-flat" data-help-url="https://landscape.227.info/help/excel">Справка</button>
         <button id="export-btn" class="button-flat">Выгрузка</button>
       </div>
     </div>
