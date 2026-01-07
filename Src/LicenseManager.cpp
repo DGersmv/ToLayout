@@ -5,6 +5,8 @@
 #include <Windows.h>
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
+#include <shlobj.h>
+#pragma comment(lib, "shell32.lib")
 #include <cstdio>
 #else
 #include <sys/socket.h>
@@ -93,27 +95,65 @@ GS::UniString LicenseManager::GetAddonFilePath()
 }
 
 // =============================================================================
-// Получить путь к файлу лицензии (рядом с .apx файлом)
+// Получить путь к директории пользовательских данных (AppData\Local\LandscapeHelper)
+// =============================================================================
+
+GS::UniString LicenseManager::GetUserDataDirectory()
+{
+#ifdef GS_WIN
+	wchar_t appDataPath[MAX_PATH];
+	if (SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appDataPath) == S_OK) {
+		GS::UniString userDataDir(appDataPath);
+		userDataDir += "\\LandscapeHelper";
+		
+		// Создаем директорию, если её нет
+		CreateDirectoryW(userDataDir.ToUStr().Get(), nullptr);
+		
+		return userDataDir;
+	}
+#endif
+	return GS::UniString();
+}
+
+// =============================================================================
+// Получить путь к файлу лицензии (проверяет оба места: рядом с .apx и в AppData)
+// Возвращает путь к найденному файлу или первый путь для проверки
 // =============================================================================
 
 GS::UniString LicenseManager::GetLicenseFilePath()
 {
+	// Сначала проверяем рядом с .apx файлом
 	GS::UniString addonPath = GetAddonFilePath();
-	if (addonPath.IsEmpty()) {
-		return GS::UniString();
+	if (!addonPath.IsEmpty()) {
+		GS::UniString licensePath = addonPath;
+		
+		// Убираем расширение .apx и добавляем .lic
+		UIndex lastDot = licensePath.FindLast('.');
+		if (lastDot != MaxUIndex) {
+			licensePath = licensePath.GetSubstring(0, lastDot);
+		}
+		licensePath += ".lic";
+		
+		// Проверяем существование файла
+#ifdef GS_WIN
+		if (GetFileAttributesW(licensePath.ToUStr().Get()) != INVALID_FILE_ATTRIBUTES) {
+			return licensePath;
+		}
+#else
+		// Для других платформ - просто возвращаем путь
+		return licensePath;
+#endif
 	}
-
-	// Убираем расширение .apx и добавляем .lic
-	GS::UniString licensePath = addonPath;
 	
-	// Находим последнюю точку
-	UIndex lastDot = licensePath.FindLast('.');
-	if (lastDot != MaxUIndex) {
-		licensePath = licensePath.GetSubstring(0, lastDot);
+	// Если не нашли рядом с .apx, проверяем в AppData
+	GS::UniString userDataDir = GetUserDataDirectory();
+	if (!userDataDir.IsEmpty()) {
+		GS::UniString licensePath = userDataDir;
+		licensePath += "\\license.lic";
+		return licensePath;
 	}
 	
-	licensePath += ".lic";
-	return licensePath;
+	return GS::UniString();
 }
 
 // =============================================================================
@@ -262,22 +302,59 @@ GS::UniString LicenseManager::GetCurrentDate()
 
 // =============================================================================
 // Проверить лицензию (главная функция)
+// Проверяет в двух местах: рядом с .apx и в AppData\Local\LandscapeHelper
 // =============================================================================
 
 LicenseManager::LicenseStatus LicenseManager::CheckLicense(LicenseData& licenseData)
 {
-	// Получаем путь к файлу лицензии
-	GS::UniString licensePath = GetLicenseFilePath();
-	if (licensePath.IsEmpty()) {
+	bool licenseFound = false;
+	
+	// Сначала проверяем рядом с .apx файлом
+	GS::UniString addonPath = GetAddonFilePath();
+	if (!addonPath.IsEmpty()) {
+		GS::UniString licensePath = addonPath;
+		
+		// Убираем расширение .apx и добавляем .lic
+		UIndex lastDot = licensePath.FindLast('.');
+		if (lastDot != MaxUIndex) {
+			licensePath = licensePath.GetSubstring(0, lastDot);
+		}
+		licensePath += ".lic";
+		
+		// Проверяем существование и читаем файл
+#ifdef GS_WIN
+		if (GetFileAttributesW(licensePath.ToUStr().Get()) != INVALID_FILE_ATTRIBUTES) {
+			if (ReadLicenseFile(licensePath, licenseData)) {
+				licenseFound = true;
+			}
+		}
+#else
+		if (ReadLicenseFile(licensePath, licenseData)) {
+			licenseFound = true;
+		}
+#endif
+	}
+	
+	// Если не нашли рядом с .apx, проверяем в AppData
+	if (!licenseFound) {
+		GS::UniString userDataDir = GetUserDataDirectory();
+		if (!userDataDir.IsEmpty()) {
+			GS::UniString licensePath = userDataDir;
+			licensePath += "\\license.lic";
+			
+			if (ReadLicenseFile(licensePath, licenseData)) {
+				licenseFound = true;
+			}
+		}
+	}
+	
+	// Если файл не найден
+	if (!licenseFound) {
 		WriteLicenseLog(LicenseStatus::NotFound, licenseData);
 		return LicenseStatus::NotFound;
 	}
 
-	// Читаем файл лицензии
-	if (!ReadLicenseFile(licensePath, licenseData)) {
-		WriteLicenseLog(LicenseStatus::NotFound, licenseData);
-		return LicenseStatus::NotFound;
-	}
+	// Проверяем валидность лицензии
 
 	// Проверяем что все поля заполнены
 	if (licenseData.computerId.IsEmpty() ||
@@ -326,17 +403,14 @@ LicenseManager::LicenseStatus LicenseManager::CheckLicense(LicenseData& licenseD
 
 void LicenseManager::WriteLicenseLog(LicenseStatus status, const LicenseData& licenseData)
 {
-	GS::UniString logPath = GetLicenseFilePath();
-	if (logPath.IsEmpty()) {
+	// Логи пишем в AppData\Local\LandscapeHelper
+	GS::UniString userDataDir = GetUserDataDirectory();
+	if (userDataDir.IsEmpty()) {
 		return;
 	}
-
-	// Меняем расширение на .log
-	UIndex lastDot = logPath.FindLast('.');
-	if (lastDot != MaxUIndex) {
-		logPath = logPath.GetSubstring(0, lastDot);
-	}
-	logPath += ".log";
+	
+	GS::UniString logPath = userDataDir;
+	logPath += "\\license.log";
 
 	// Открываем файл для добавления (append mode)
 #ifdef GS_WIN
@@ -410,17 +484,14 @@ void LicenseManager::WriteLicenseLog(LicenseStatus status, const LicenseData& li
 
 void LicenseManager::WriteLog(const GS::UniString& message)
 {
-	GS::UniString logPath = GetLicenseFilePath();
-	if (logPath.IsEmpty()) {
+	// Логи пишем в AppData\Local\LandscapeHelper
+	GS::UniString userDataDir = GetUserDataDirectory();
+	if (userDataDir.IsEmpty()) {
 		return;
 	}
-
-	// Меняем расширение на .log
-	UIndex lastDot = logPath.FindLast('.');
-	if (lastDot != MaxUIndex) {
-		logPath = logPath.GetSubstring(0, lastDot);
-	}
-	logPath += ".log";
+	
+	GS::UniString logPath = userDataDir;
+	logPath += "\\license.log";
 
 	// Открываем файл для добавления (append mode)
 #ifdef GS_WIN
@@ -455,23 +526,121 @@ void LicenseManager::WriteLog(const GS::UniString& message)
 
 GS::UniString LicenseManager::GetDemoFilePath()
 {
-	GS::UniString addonPath = GetAddonFilePath();
-	if (addonPath.IsEmpty()) {
-		return GS::UniString();
+	// Демо-файл храним в AppData\Local\LandscapeHelper
+	GS::UniString userDataDir = GetUserDataDirectory();
+	if (!userDataDir.IsEmpty()) {
+		GS::UniString demoPath = userDataDir;
+		demoPath += "\\demo.dat";
+		return demoPath;
 	}
+	return GS::UniString();
+}
 
-	// Меняем расширение на .demo
-	UIndex lastDot = addonPath.FindLast('.');
-	if (lastDot != MaxUIndex) {
-		addonPath = addonPath.GetSubstring(0, lastDot);
+// =============================================================================
+// Работа с реестром: получить дату первого запуска
+// =============================================================================
+
+GS::UniString LicenseManager::GetFirstLaunchDateFromRegistry()
+{
+#ifdef GS_WIN
+	HKEY hKey;
+	LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\LandscapeHelper", 0, KEY_READ, &hKey);
+	
+	if (result == ERROR_SUCCESS) {
+		wchar_t valueBuffer[64];
+		DWORD valueSize = sizeof(valueBuffer);
+		DWORD valueType = REG_SZ;
+		
+		result = RegQueryValueExW(hKey, L"FirstLaunchDate", nullptr, &valueType, 
+			reinterpret_cast<LPBYTE>(valueBuffer), &valueSize);
+		
+		RegCloseKey(hKey);
+		
+		if (result == ERROR_SUCCESS && valueType == REG_SZ) {
+			return GS::UniString(valueBuffer);
+		}
 	}
-	addonPath += ".demo";
+#endif
+	return GS::UniString();
+}
 
-	return addonPath;
+// =============================================================================
+// Работа с реестром: установить дату первого запуска
+// =============================================================================
+
+void LicenseManager::SetFirstLaunchDateToRegistry(const GS::UniString& date)
+{
+#ifdef GS_WIN
+	HKEY hKey;
+	LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\LandscapeHelper", 
+		0, nullptr, REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr, &hKey, nullptr);
+	
+	if (result == ERROR_SUCCESS) {
+		const wchar_t* dateStr = date.ToUStr().Get();
+		RegSetValueExW(hKey, L"FirstLaunchDate", 0, REG_SZ, 
+			reinterpret_cast<const BYTE*>(dateStr), 
+			static_cast<DWORD>((wcslen(dateStr) + 1) * sizeof(wchar_t)));
+		
+		RegCloseKey(hKey);
+	}
+#endif
+}
+
+// =============================================================================
+// Работа с реестром: получить счетчик запусков
+// =============================================================================
+
+int LicenseManager::GetLaunchCountFromRegistry()
+{
+#ifdef GS_WIN
+	HKEY hKey;
+	LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\LandscapeHelper", 0, KEY_READ, &hKey);
+	
+	if (result == ERROR_SUCCESS) {
+		DWORD value = 0;
+		DWORD valueSize = sizeof(DWORD);
+		DWORD valueType = REG_DWORD;
+		
+		result = RegQueryValueExW(hKey, L"LaunchCount", nullptr, &valueType, 
+			reinterpret_cast<LPBYTE>(&value), &valueSize);
+		
+		RegCloseKey(hKey);
+		
+		if (result == ERROR_SUCCESS && valueType == REG_DWORD) {
+			// Валидация: только 0-100
+			if (value <= 100) {
+				return static_cast<int>(value);
+			}
+		}
+	}
+#endif
+	return 0;
+}
+
+// =============================================================================
+// Работа с реестром: установить счетчик запусков
+// =============================================================================
+
+void LicenseManager::SetLaunchCountToRegistry(int count)
+{
+#ifdef GS_WIN
+	HKEY hKey;
+	LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\LandscapeHelper", 
+		0, nullptr, REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr, &hKey, nullptr);
+	
+	if (result == ERROR_SUCCESS) {
+		DWORD value = static_cast<DWORD>(count);
+		RegSetValueExW(hKey, L"LaunchCount", 0, REG_DWORD, 
+			reinterpret_cast<const BYTE*>(&value), sizeof(DWORD));
+		
+		RegCloseKey(hKey);
+	}
+#endif
 }
 
 // =============================================================================
 // Демо-режим: проверить, активен ли демо-период (22 дня или 22 запуска)
+// Проверка срока идет по реестру (защита от удаления), счетчик запусков - из файла
 // =============================================================================
 
 bool LicenseManager::CheckDemoPeriod(DemoData& demoData)
@@ -479,74 +648,34 @@ bool LicenseManager::CheckDemoPeriod(DemoData& demoData)
 	const int MAX_LAUNCHES = 22;
 	const int MAX_DAYS = 22;
 
-	GS::UniString demoPath = GetDemoFilePath();
-	if (demoPath.IsEmpty()) {
-		// Если не можем получить путь, считаем что демо истек
-		return false;
-	}
-
-	// Читаем файл демо-данных
-#ifdef GS_WIN
-	FILE* fp = _wfopen(demoPath.ToUStr().Get(), L"r");
-#else
-	FILE* fp = fopen(demoPath.ToCStr().Get(), "r");
-#endif
-
-	if (fp == nullptr) {
-		// Файл не существует - это первый запуск, создаем демо-данные
-		demoData.firstLaunchDate = GetCurrentDate();
-		demoData.lastLaunchDate = GetCurrentDate();
-		demoData.launchCount = 1;
+	GS::UniString currentDate = GetCurrentDate();
+	
+	// Получаем дату первого запуска из реестра (основной источник)
+	GS::UniString firstLaunchDate = GetFirstLaunchDateFromRegistry();
+	
+	// Если в реестре нет даты - это первый запуск
+	if (firstLaunchDate.IsEmpty()) {
+		firstLaunchDate = currentDate;
+		SetFirstLaunchDateToRegistry(firstLaunchDate);
+		demoData.firstLaunchDate = firstLaunchDate;
+		demoData.lastLaunchDate = currentDate;
+		demoData.launchCount = 0; // Будет увеличен в UpdateDemoData
 		return true; // Демо активен
 	}
+	
+	demoData.firstLaunchDate = firstLaunchDate;
 
-	// Читаем данные из файла
-	char line[256];
-	demoData.launchCount = 0;
-	demoData.firstLaunchDate = GS::UniString();
-	demoData.lastLaunchDate = GS::UniString();
+	// Получаем счетчик запусков из реестра (основной источник, защищен от изменений)
+	demoData.launchCount = GetLaunchCountFromRegistry();
+	demoData.lastLaunchDate = currentDate;
 
-	while (fgets(line, sizeof(line), fp) != nullptr) {
-		GS::UniString uniLine(line);
-		GS::UniString key, value;
-		if (ParseLicenseLine(uniLine, key, value)) {
-			if (key == GS::UniString("FIRST_LAUNCH_DATE")) {
-				demoData.firstLaunchDate = value;
-			} else if (key == GS::UniString("LAST_LAUNCH_DATE")) {
-				demoData.lastLaunchDate = value;
-			} else if (key == GS::UniString("LAUNCH_COUNT")) {
-				// Конвертируем строку в число
-				GS::UniString countStr = value;
-				demoData.launchCount = 0;
-				for (UIndex i = 0; i < countStr.GetLength(); ++i) {
-					GS::UniString ch = countStr.GetSubstring(i, 1);
-					if (ch >= GS::UniString("0") && ch <= GS::UniString("9")) {
-						GS::UniString chStr = ch.GetSubstring(0, 1);
-						demoData.launchCount = demoData.launchCount * 10 + (chStr.ToCStr().Get()[0] - '0');
-					}
-				}
-			}
-		}
-	}
-
-	fclose(fp);
-
-	// Если данные не найдены, создаем новые
-	if (demoData.firstLaunchDate.IsEmpty()) {
-		demoData.firstLaunchDate = GetCurrentDate();
-		demoData.lastLaunchDate = GetCurrentDate();
-		demoData.launchCount = 1;
-		return true;
-	}
-
-	// Проверяем лимит запусков
+	// Проверяем лимит запусков (из реестра)
 	if (demoData.launchCount >= MAX_LAUNCHES) {
 		return false; // Демо истек по количеству запусков
 	}
 
-	// Проверяем лимит дней
-	GS::UniString currentDate = GetCurrentDate();
-	if (CompareDates(demoData.firstLaunchDate, currentDate)) {
+	// Проверяем лимит дней (ОСНОВНАЯ ПРОВЕРКА - по реестру)
+	if (CompareDates(firstLaunchDate, currentDate)) {
 		// Вычисляем разницу в днях
 		int year1 = 0, month1 = 0, day1 = 0, year2 = 0, month2 = 0, day2 = 0;
 		if (demoData.firstLaunchDate.GetLength() >= 10 && currentDate.GetLength() >= 10) {
@@ -622,58 +751,38 @@ void LicenseManager::UpdateDemoData()
 	DemoData demoData;
 	GS::UniString currentDate = GetCurrentDate();
 
-	// Читаем текущие данные
+	// Получаем дату первого запуска из реестра (основной источник, защищен от изменений)
+	demoData.firstLaunchDate = GetFirstLaunchDateFromRegistry();
+	if (demoData.firstLaunchDate.IsEmpty()) {
+		// Если в реестре нет - это первый запуск, устанавливаем текущую дату
+		demoData.firstLaunchDate = currentDate;
+		SetFirstLaunchDateToRegistry(currentDate);
+	}
+
+	// Получаем счетчик запусков из реестра (основной источник, защищен от изменений)
+	int launchCount = GetLaunchCountFromRegistry();
+	
+	// Увеличиваем счетчик запусков
+	launchCount++;
+	
+	// Ограничиваем максимум 22
+	if (launchCount > 22) {
+		launchCount = 22;
+	}
+	
+	// Сохраняем в реестр (защита от подделки)
+	SetLaunchCountToRegistry(launchCount);
+	
+	demoData.launchCount = launchCount;
+	demoData.lastLaunchDate = currentDate; // Всегда текущая дата
+
+	// Перезаписываем файл с актуальными данными из реестра (защита от модификации)
 	GS::UniString demoPath = GetDemoFilePath();
 	if (demoPath.IsEmpty()) {
 		return;
 	}
-
-#ifdef GS_WIN
-	FILE* fp = _wfopen(demoPath.ToUStr().Get(), L"r");
-#else
-	FILE* fp = fopen(demoPath.ToCStr().Get(), "r");
-#endif
-
-	if (fp != nullptr) {
-		char line[256];
-		demoData.launchCount = 0;
-		demoData.firstLaunchDate = GS::UniString();
-		demoData.lastLaunchDate = GS::UniString();
-
-		while (fgets(line, sizeof(line), fp) != nullptr) {
-			GS::UniString uniLine(line);
-			GS::UniString key, value;
-			if (ParseLicenseLine(uniLine, key, value)) {
-				if (key == GS::UniString("FIRST_LAUNCH_DATE")) {
-					demoData.firstLaunchDate = value;
-				} else if (key == GS::UniString("LAST_LAUNCH_DATE")) {
-					demoData.lastLaunchDate = value;
-				} else if (key == GS::UniString("LAUNCH_COUNT")) {
-					GS::UniString countStr = value;
-					demoData.launchCount = 0;
-					for (UIndex i = 0; i < countStr.GetLength(); ++i) {
-						GS::UniString ch = countStr.GetSubstring(i, 1);
-						if (ch >= GS::UniString("0") && ch <= GS::UniString("9")) {
-							GS::UniString chStr = ch.GetSubstring(0, 1);
-							demoData.launchCount = demoData.launchCount * 10 + (chStr.ToCStr().Get()[0] - '0');
-						}
-					}
-				}
-			}
-		}
-		fclose(fp);
-	}
-
-	// Если это первый запуск, устанавливаем дату первого запуска
-	if (demoData.firstLaunchDate.IsEmpty()) {
-		demoData.firstLaunchDate = currentDate;
-	}
-
-	// Увеличиваем счетчик запусков
-	demoData.launchCount++;
-	demoData.lastLaunchDate = currentDate;
-
-	// Записываем обновленные данные
+	
+	FILE* fp;
 #ifdef GS_WIN
 	fp = _wfopen(demoPath.ToUStr().Get(), L"w");
 #else
@@ -681,24 +790,203 @@ void LicenseManager::UpdateDemoData()
 #endif
 
 	if (fp != nullptr) {
-		// Формируем строки для записи
+		// Переписываем файл с актуальными данными из реестра (защита от модификации)
+		// Всегда записываем корректные данные, игнорируя что было в файле
 		char line[256];
+		
+		const int MAX_LAUNCHES = 22;
+		const int MAX_DAYS = 22;
+		
+		// Вычисляем дату окончания демо (первый запуск + 22 дня)
+		GS::UniString expiresDate;
+		int daysRemaining = MAX_DAYS;
+		
+		if (!demoData.firstLaunchDate.IsEmpty() && demoData.firstLaunchDate.GetLength() >= 10) {
+			// Парсим дату первого запуска
+			int year = 0, month = 0, day = 0;
+			const char* dateStr = demoData.firstLaunchDate.ToCStr().Get();
+			if (sscanf(dateStr, "%d-%d-%d", &year, &month, &day) == 3) {
+				// Создаем структуру времени
+				std::tm tm1 = {};
+				tm1.tm_year = year - 1900;
+				tm1.tm_mon = month - 1;
+				tm1.tm_mday = day + MAX_DAYS; // Добавляем 22 дня
+				tm1.tm_hour = 12;
+				
+				// Нормализуем дату (mktime исправит переполнение дней)
+				std::time_t expiresTime = std::mktime(&tm1);
+				std::tm* expiresTm = std::localtime(&expiresTime);
+				
+				if (expiresTm != nullptr) {
+					char expDateStr[32];
 #ifdef GS_WIN
-		sprintf_s(line, sizeof(line), "FIRST_LAUNCH_DATE=%s\n", demoData.firstLaunchDate.ToCStr().Get());
-		fputs(line, fp);
-		sprintf_s(line, sizeof(line), "LAST_LAUNCH_DATE=%s\n", demoData.lastLaunchDate.ToCStr().Get());
-		fputs(line, fp);
+					sprintf_s(expDateStr, sizeof(expDateStr), "%04d-%02d-%02d",
+						expiresTm->tm_year + 1900, expiresTm->tm_mon + 1, expiresTm->tm_mday);
+#else
+					snprintf(expDateStr, sizeof(expDateStr), "%04d-%02d-%02d",
+						expiresTm->tm_year + 1900, expiresTm->tm_mon + 1, expiresTm->tm_mday);
+#endif
+					expiresDate = GS::UniString(expDateStr);
+				}
+				
+				// Вычисляем сколько дней осталось
+				std::time_t now = std::time(nullptr);
+				double diffSeconds = std::difftime(expiresTime, now);
+				daysRemaining = static_cast<int>(diffSeconds / (24 * 60 * 60));
+				if (daysRemaining < 0) daysRemaining = 0;
+			}
+		}
+		
+		int launchesRemaining = MAX_LAUNCHES - demoData.launchCount;
+		if (launchesRemaining < 0) launchesRemaining = 0;
+
+#ifdef GS_WIN
+		// Записываем дату первого запуска из реестра (источник правды)
+		if (!demoData.firstLaunchDate.IsEmpty()) {
+			sprintf_s(line, sizeof(line), "FIRST_LAUNCH_DATE=%s\n", demoData.firstLaunchDate.ToCStr().Get());
+			fputs(line, fp);
+		}
+		// Записываем дату окончания демо
+		if (!expiresDate.IsEmpty()) {
+			sprintf_s(line, sizeof(line), "DEMO_EXPIRES_DATE=%s\n", expiresDate.ToCStr().Get());
+			fputs(line, fp);
+		}
+		// Записываем счетчик запусков
 		sprintf_s(line, sizeof(line), "LAUNCH_COUNT=%d\n", demoData.launchCount);
 		fputs(line, fp);
+		// Записываем сколько осталось запусков
+		sprintf_s(line, sizeof(line), "LAUNCHES_REMAINING=%d\n", launchesRemaining);
+		fputs(line, fp);
+		// Записываем сколько осталось дней
+		sprintf_s(line, sizeof(line), "DAYS_REMAINING=%d\n", daysRemaining);
+		fputs(line, fp);
 #else
-		snprintf(line, sizeof(line), "FIRST_LAUNCH_DATE=%s\n", demoData.firstLaunchDate.ToCStr().Get());
-		fputs(line, fp);
-		snprintf(line, sizeof(line), "LAST_LAUNCH_DATE=%s\n", demoData.lastLaunchDate.ToCStr().Get());
-		fputs(line, fp);
+		if (!demoData.firstLaunchDate.IsEmpty()) {
+			snprintf(line, sizeof(line), "FIRST_LAUNCH_DATE=%s\n", demoData.firstLaunchDate.ToCStr().Get());
+			fputs(line, fp);
+		}
+		if (!expiresDate.IsEmpty()) {
+			snprintf(line, sizeof(line), "DEMO_EXPIRES_DATE=%s\n", expiresDate.ToCStr().Get());
+			fputs(line, fp);
+		}
 		snprintf(line, sizeof(line), "LAUNCH_COUNT=%d\n", demoData.launchCount);
+		fputs(line, fp);
+		snprintf(line, sizeof(line), "LAUNCHES_REMAINING=%d\n", launchesRemaining);
+		fputs(line, fp);
+		snprintf(line, sizeof(line), "DAYS_REMAINING=%d\n", daysRemaining);
 		fputs(line, fp);
 #endif
 		fclose(fp);
 	}
+}
+
+// =============================================================================
+// Сформировать URL для страницы лицензии с данными о плагине
+// =============================================================================
+
+GS::UniString LicenseManager::BuildLicenseUrl()
+{
+	GS::UniString url = GS::UniString("https://landscape.227.info/license");
+	
+	// Получаем MAC-адрес
+	GS::UniString macAddress = GetComputerId();
+	if (!macAddress.IsEmpty()) {
+		url += GS::UniString("?mac=") + macAddress;
+	}
+	
+	// Сначала проверяем, есть ли валидная лицензия
+	LicenseData licenseData;
+	LicenseStatus licenseStatus = CheckLicense(licenseData);
+	
+	if (licenseStatus == LicenseStatus::Valid) {
+		// Лицензия валидна - передаем информацию о лицензии
+		url += GS::UniString("&mode=license");
+		
+		if (!licenseData.validUntil.IsEmpty()) {
+			url += GS::UniString("&validUntil=") + licenseData.validUntil;
+		}
+		if (!licenseData.issuedDate.IsEmpty()) {
+			url += GS::UniString("&issuedDate=") + licenseData.issuedDate;
+		}
+		if (!licenseData.licenseKey.IsEmpty()) {
+			url += GS::UniString("&licenseKey=") + licenseData.licenseKey;
+		}
+		
+		return url;
+	}
+	
+	// Лицензии нет - передаем информацию о демо
+	url += GS::UniString("&mode=demo");
+	
+	// Читаем демо-файл
+	GS::UniString demoPath = GetDemoFilePath();
+	if (demoPath.IsEmpty()) {
+		return url; // Возвращаем URL только с MAC и mode=demo, если файл не найден
+	}
+	
+	FILE* fp;
+#ifdef GS_WIN
+	fp = _wfopen(demoPath.ToUStr().Get(), L"r");
+#else
+	fp = fopen(demoPath.ToCStr().Get(), "r");
+#endif
+	
+	if (fp == nullptr) {
+		return url; // Возвращаем URL только с MAC и mode=demo, если файл не открылся
+	}
+	
+	// Переменные для хранения данных
+	GS::UniString firstLaunchDate;
+	GS::UniString demoExpiresDate;
+	GS::UniString launchCount;
+	GS::UniString launchesRemaining;
+	GS::UniString daysRemaining;
+	
+	// Читаем файл построчно
+	char lineBuffer[256];
+	while (fgets(lineBuffer, sizeof(lineBuffer), fp) != nullptr) {
+		GS::UniString line(lineBuffer);
+		line.Trim();
+		
+		if (line.IsEmpty()) {
+			continue;
+		}
+		
+		GS::UniString key, value;
+		if (ParseLicenseLine(line, key, value)) {
+			if (key == GS::UniString("FIRST_LAUNCH_DATE")) {
+				firstLaunchDate = value;
+			} else if (key == GS::UniString("DEMO_EXPIRES_DATE")) {
+				demoExpiresDate = value;
+			} else if (key == GS::UniString("LAUNCH_COUNT")) {
+				launchCount = value;
+			} else if (key == GS::UniString("LAUNCHES_REMAINING")) {
+				launchesRemaining = value;
+			} else if (key == GS::UniString("DAYS_REMAINING")) {
+				daysRemaining = value;
+			}
+		}
+	}
+	
+	fclose(fp);
+	
+	// Добавляем параметры к URL
+	if (!firstLaunchDate.IsEmpty()) {
+		url += GS::UniString("&firstLaunch=") + firstLaunchDate;
+	}
+	if (!demoExpiresDate.IsEmpty()) {
+		url += GS::UniString("&demoExpires=") + demoExpiresDate;
+	}
+	if (!launchCount.IsEmpty()) {
+		url += GS::UniString("&launchCount=") + launchCount;
+	}
+	if (!launchesRemaining.IsEmpty()) {
+		url += GS::UniString("&launchesRemaining=") + launchesRemaining;
+	}
+	if (!daysRemaining.IsEmpty()) {
+		url += GS::UniString("&daysRemaining=") + daysRemaining;
+	}
+	
+	return url;
 }
 
