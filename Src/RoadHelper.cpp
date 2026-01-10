@@ -1399,14 +1399,14 @@ namespace RoadHelper {
         element.text.width = 100.0; // Фиксированная ширина для горизонтального текста
         element.text.nonBreaking = true; // Без переноса строк
         
-        // Формируем текст с площадью (используем UniString для AC28)
+        // Формируем текст с площадью (используем UniString для AC27)
         char textBuf[256];
         snprintf(textBuf, sizeof(textBuf), "S = %.2f m2", areaM2);
         
         API_ElementMemo memo = {};
         BNZeroMemory(&memo, sizeof(API_ElementMemo));
         
-        // В AC28 textContent это GS::UniString*
+        // В AC27 textContent это GS::UniString*
         memo.textContent = new GS::UniString { textBuf };
         
         // Создаем текстовый элемент
