@@ -371,8 +371,8 @@ LicenseManager::LicenseStatus LicenseManager::CheckLicense(LicenseData& licenseD
 		return LicenseStatus::ComputerMismatch;
 	}
 
-	// Проверяем название плагина (ожидаем LandscapeHelper_AC29 или Browser_Repl_Int)
-	GS::UniString expectedPluginName1 = GS::UniString("LandscapeHelper_AC29");
+	// Проверяем название плагина (ожидаем LandscapeHelper_AC28 или Browser_Repl_Int)
+	GS::UniString expectedPluginName1 = GS::UniString("LandscapeHelper_AC28");
 	GS::UniString expectedPluginName2 = GS::UniString("Browser_Repl_Int");
 	if (licenseData.pluginName != expectedPluginName1 && 
 		licenseData.pluginName != expectedPluginName2) {
