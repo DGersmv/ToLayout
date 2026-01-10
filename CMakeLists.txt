@@ -1,11 +1,7 @@
 cmake_minimum_required (VERSION 3.16)
 
-# Find Python 3
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-message(STATUS "Using Python: ${Python3_EXECUTABLE} (version ${Python3_VERSION})")
-
 function (SetCompilerOptions target)
-	target_compile_features (${target} PUBLIC cxx_std_20)
+	target_compile_features (${target} PUBLIC cxx_std_17)
 	target_compile_options (${target} PUBLIC "$<$<CONFIG:Debug>:-DDEBUG>")
 	if (WIN32)
 		target_compile_options (${target} PUBLIC /W3 /WX /wd4996 /Zc:wchar_t-)
@@ -35,7 +31,7 @@ function (AddGSModuleIncludeFolder target folder)
 	target_include_directories (${target} PUBLIC "${folder}")
 endfunction ()
 
-function (AddGSModuleLinkLibrary target library)
+function (AddGSModuleLinkLibrary target library)	
 	if (WIN32)
 		file (GLOB libs "${library}/Win/*.lib")
 		foreach (lib ${libs})
@@ -55,7 +51,7 @@ get_filename_component (CMAKE_CURRENT_FOLDER_NAME "${CMAKE_CURRENT_LIST_DIR}" NA
 set (CMAKE_SUPPRESS_REGENERATION 1)
 set (CMAKE_CONFIGURATION_TYPES Debug;Release;RelWithDebInfo)
 if (WIN32)
-	set (CMAKE_GENERATOR_TOOLSET v143)
+	set (CMAKE_GENERATOR_TOOLSET v142)
 	set (CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
 else ()
 	set (CMAKE_OSX_DEPLOYMENT_TARGET ___MACOSX_DEPLOYMENT_TARGET___)
@@ -130,7 +126,7 @@ if (WIN32)
 		DEPENDS ${AddOnResourceFiles} ${AddOnImageFiles}
 		COMMENT "Compiling resources..."
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${ResourceObjectsDir}"
-		COMMAND ${Python3_EXECUTABLE} "${APIDevKitToolsFolderAbsolute}/CompileResources.py" "${AC_ADDON_LANGUAGE}" "${AC_API_DEVKIT_DIR}" "${AddOnSourcesFolderAbsolute}" "${AddOnResourcesFolderAbsolute}" "${ResourceObjectsDir}" "${ResourceObjectsDir}/${AC_ADDON_NAME}.res"
+		COMMAND python "${APIDevKitToolsFolderAbsolute}/CompileResources.py" "${AC_ADDON_LANGUAGE}" "${AC_API_DEVKIT_DIR}" "${AddOnSourcesFolderAbsolute}" "${AddOnResourcesFolderAbsolute}" "${ResourceObjectsDir}" "${ResourceObjectsDir}/${AC_ADDON_NAME}.res"
 		COMMAND ${CMAKE_COMMAND} -E touch "${ResourceObjectsDir}/AddOnResources.stamp"
 	)
 else ()
@@ -139,7 +135,7 @@ else ()
 		DEPENDS ${AddOnResourceFiles} ${AddOnImageFiles}
 		COMMENT "Compiling resources..."
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${ResourceObjectsDir}"
-		COMMAND ${Python3_EXECUTABLE} "${APIDevKitToolsFolderAbsolute}/CompileResources.py" "${AC_ADDON_LANGUAGE}" "${AC_API_DEVKIT_DIR}" "${AddOnSourcesFolderAbsolute}" "${AddOnResourcesFolderAbsolute}" "${ResourceObjectsDir}" "${CMAKE_BINARY_DIR}/$<CONFIG>/${AC_ADDON_NAME}.bundle/Contents/Resources"
+		COMMAND python "${APIDevKitToolsFolderAbsolute}/CompileResources.py" "${AC_ADDON_LANGUAGE}" "${AC_API_DEVKIT_DIR}" "${AddOnSourcesFolderAbsolute}" "${AddOnResourcesFolderAbsolute}" "${ResourceObjectsDir}" "${CMAKE_BINARY_DIR}/$<CONFIG>/${AC_ADDON_NAME}.bundle/Contents/Resources"
 		COMMAND ${CMAKE_COMMAND} -E copy "${AC_API_DEVKIT_DIR}/Support/Inc/PkgInfo" "${CMAKE_BINARY_DIR}/$<CONFIG>/${AC_ADDON_NAME}.bundle/Contents/PkgInfo"
 		COMMAND ${CMAKE_COMMAND} -E touch "${ResourceObjectsDir}/AddOnResources.stamp"
 	)
@@ -182,10 +178,10 @@ if (WIN32)
 	
 	# Имена бинарников по конфигурациям:
 	#    Debug   → ${AC_ADDON_NAME}    (из имени папки)
-	#    Release → LandscapeHelper_AC29
+	#    Release → LandscapeHelper_AC28
 	set_target_properties (AddOn PROPERTIES
 		OUTPUT_NAME_DEBUG         "${AC_ADDON_NAME}"
-		OUTPUT_NAME_RELEASE       "LandscapeHelper_AC29"
+		OUTPUT_NAME_RELEASE       "LandscapeHelper_AC28"
 		OUTPUT_NAME_RELWITHDEBINFO "${AC_ADDON_NAME}"
 		SUFFIX ".apx"
 	)
@@ -195,10 +191,10 @@ if (WIN32)
 		PDB_OUTPUT_DIRECTORY             "${CMAKE_SOURCE_DIR}/ToArchicad/$<CONFIG>"
 		COMPILE_PDB_OUTPUT_DIRECTORY     "${CMAKE_SOURCE_DIR}/ToArchicad/$<CONFIG>"
 		PDB_NAME_DEBUG                   "${AC_ADDON_NAME}"
-		PDB_NAME_RELEASE                 "LandscapeHelper_AC29"
+		PDB_NAME_RELEASE                 "LandscapeHelper_AC28"
 		PDB_NAME_RELWITHDEBINFO          "${AC_ADDON_NAME}"
 		COMPILE_PDB_NAME_DEBUG           "${AC_ADDON_NAME}"
-		COMPILE_PDB_NAME_RELEASE         "LandscapeHelper_AC29"
+		COMPILE_PDB_NAME_RELEASE         "LandscapeHelper_AC28"
 		COMPILE_PDB_NAME_RELWITHDEBINFO  "${AC_ADDON_NAME}"
 	)
 else ()
@@ -254,21 +250,5 @@ file (GLOB GSLinkLibFolders
 foreach (linkLibFolder ${GSLinkLibFolders})
 	AddGSModuleLinkLibrary (AddOn ${linkLibFolder})
 endforeach ()
-get_filename_component(new_hpp "${APIDevKitModulesDir}/GSRoot/GSNew.hpp" REALPATH)
-get_filename_component(malloc_hpp "${APIDevKitModulesDir}/GSRoot/GSMalloc.hpp" REALPATH)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(
-        AddOn PRIVATE
-        "SHELL:/FI \"${new_hpp}\""
-        "SHELL:/FI \"${malloc_hpp}\""
-    )
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang\$")
-    target_compile_options(
-        AddOn PRIVATE
-        "SHELL:-include \"${new_hpp}\""
-        "SHELL:-include \"${malloc_hpp}\""
-    )
-else()
-    message(FATAL_ERROR "Unknown compiler ID.")
-endif()
+
 
