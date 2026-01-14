@@ -805,6 +805,41 @@ bool GroundHelper::ApplyZDelta(double deltaMeters)
     return (cmdErr == NoError);
 }
 
+bool GroundHelper::ApplyAbsoluteZ(double absoluteHeightMeters)
+{
+    Log("[ApplyAbsoluteZ] ENTER absoluteHeight=%.6f", absoluteHeightMeters);
+
+    // ВСЕГДА обновляем кэш из текущего выделения, чтобы использовать актуальные объекты
+    Log("[ApplyAbsoluteZ] updating cache from current selection");
+    if (!SetGroundObjects()) { 
+        Log("[ApplyAbsoluteZ] no objects in selection"); 
+        return false; 
+    }
+
+    const GSErr cmdErr = ACAPI_CallUndoableCommand("Set Absolute Z", [=]() -> GSErr {
+        for (const API_Guid& guid : g_objectGuids) {
+            API_Element e{}; if (!FetchElementByGuid(guid, e)) { Log("[absZ] fetch failed"); continue; }
+            if (IdentifyLandable(e) == LandableKind::Unsupported) { Log("[absZ] unsupported"); continue; }
+
+            const API_Coord3D anchor = GetWorldAnchor(e);
+            const double deltaWorldZ = absoluteHeightMeters - anchor.z;
+            Log("[AbsZ] guid=%s oldZ=%.6f -> newZ=%.6f (delta=%.6f)",
+                APIGuidToString(guid).ToCStr().Get(), anchor.z, absoluteHeightMeters, deltaWorldZ);
+
+            API_Element mask{};
+            SetWorldZ_WithDelta(e, absoluteHeightMeters, deltaWorldZ, mask);
+
+            const GSErr chg = ACAPI_Element_Change(&e, &mask, nullptr, 0, true);
+            if (chg == NoError) Log("[AbsZ] UPDATED %s", APIGuidToString(guid).ToCStr().Get());
+            else               Log("[AbsZ] Change FAILED err=%d %s", (int)chg, APIGuidToString(guid).ToCStr().Get());
+        }
+        return NoError;
+        });
+
+    Log("[ApplyAbsoluteZ] EXIT (err=%d)", (int)cmdErr);
+    return (cmdErr == NoError);
+}
+
 bool GroundHelper::DebugOneSelection()
 {
     Log("[DebugOneSelection] not implemented");

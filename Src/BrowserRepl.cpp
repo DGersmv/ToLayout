@@ -551,6 +551,15 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return new JS::Value(ok);
 		}));
 
+	jsACAPI->AddItem(new JS::Function("ApplyAbsoluteZ", [](GS::Ref<JS::Base> param) {
+		if (param == nullptr) {
+			return new JS::Value(false);
+		}
+		const double absoluteHeightMeters = GetDoubleFromJs(param, 0.0);
+		const bool ok = GroundHelper::ApplyAbsoluteZ(absoluteHeightMeters);
+		return new JS::Value(ok);
+		}));
+
 	// --- Ground API (посадка на Mesh) ---
 	jsACAPI->AddItem(new JS::Function("SetGroundSurface", [](GS::Ref<JS::Base>) {
 		// if (BrowserRepl::HasInstance()) BrowserRepl::GetInstance().LogToBrowser("[JS] SetGroundSurface()");
