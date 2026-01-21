@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Landscape Helper — Выбранные элементы</title>
+  <title>Table Set — Выбранные элементы</title>
   <style>
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
@@ -194,12 +194,12 @@
     }
 
     // =============== sorting ===============
-    // Состояние сортировки
-    let sortColumn = null; // 'type', 'id', 'layer' или null
-    let sortDirection = 'asc'; // 'asc' или 'desc'
+    let sortColumn = null;
+    let sortDirection = 'asc';
+    
     function sortGroupData(groupKeys) {
       if (!sortColumn) {
-        return groupKeys; // Без сортировки возвращаем исходный порядок
+        return groupKeys;
       }
       
       const sorted = groupKeys.slice().sort((keyA, keyB) => {
@@ -220,7 +220,6 @@
           return 0;
         }
         
-        // Сравнение строк
         let comparison = 0;
         if (valueA < valueB) {
           comparison = -1;
@@ -228,7 +227,6 @@
           comparison = 1;
         }
         
-        // Применяем направление сортировки
         return sortDirection === 'asc' ? comparison : -comparison;
       });
       
@@ -237,37 +235,30 @@
 
     function handleColumnSort(column) {
       if (sortColumn === column) {
-        // Переключаем направление сортировки
         sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
       } else {
-        // Устанавливаем новый столбец и направление по умолчанию
         sortColumn = column;
         sortDirection = 'asc';
       }
       
-      // Обновляем визуальные индикаторы сортировки
       updateSortIndicators();
-      
-      // Перерисовываем таблицу
       UpdateSelectedElements();
     }
 
     function updateSortIndicators() {
-      // Убираем все классы сортировки
       const headers = document.querySelectorAll('table.selection-table thead th.sortable');
       headers.forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
       });
       
-      // Добавляем класс для активного столбца
       if (sortColumn) {
         let headerIndex;
         if (sortColumn === 'type') {
-          headerIndex = 1; // Тип - второй столбец (после чекбокса)
+          headerIndex = 1;
         } else if (sortColumn === 'id') {
-          headerIndex = 2; // ID - третий столбец
+          headerIndex = 2;
         } else if (sortColumn === 'layer') {
-          headerIndex = 3; // Слой - четвертый столбец
+          headerIndex = 3;
         }
         
         if (headerIndex !== undefined) {
@@ -283,9 +274,8 @@
     }
 
     // =============== selection table ===============
-    // Модель данных: groupKey -> Array<GUID>
-    let groupDataMap = {}; // groupKey -> { guids: Array<GUID>, type, id, layer, count }
-    let selectedGuids = new Set(); // Set<GUID> - актуальные выбранные GUID
+    let groupDataMap = {};
+    let selectedGuids = new Set();
 
     function UpdateSelectedElements() {
       const A = window.ACAPI;
@@ -295,7 +285,6 @@
       A.GetSelectedElements().then(function (elemInfos) {
         const selectionTable = document.getElementById('selection');
         
-        // Формируем структуру groupKey -> Array<GUID>
         groupDataMap = {};
         if (elemInfos && elemInfos.length > 0) {
           for (let i = 0; i < elemInfos.length; i++) {
@@ -319,13 +308,10 @@
           }
         }
         
-        // Оптимизация: формируем весь HTML за раз
         let html = '';
         if (Object.keys(groupDataMap).length === 0) {
           html = '<tr><td colspan="5">Нет выбранных элементов</td></tr>';
         } else {
-          // Проверяем состояние чекбоксов для обновления selectedGuids
-          // Сохраняем текущее состояние чекбоксов перед перерисовкой
           const checkedGroups = new Set();
           const checkboxes = selectionTable.querySelectorAll('input[type="checkbox"][data-group]');
           checkboxes.forEach(cb => {
@@ -334,17 +320,14 @@
             }
           });
           
-          // Если selectedGuids пуст и нет отмеченных чекбоксов - это первый запуск, отмечаем все
           const isFirstRun = selectedGuids.size === 0 && checkedGroups.size === 0;
           
           if (isFirstRun) {
-            // При первом запуске все группы отмечены (все элементы уже выделены в Archicad)
             Object.keys(groupDataMap).forEach(groupKey => {
               const group = groupDataMap[groupKey];
               group.guids.forEach(guid => selectedGuids.add(guid));
             });
           } else {
-            // Обновляем selectedGuids на основе отмеченных групп
             selectedGuids.clear();
             checkedGroups.forEach(groupKey => {
               if (groupDataMap[groupKey]) {
@@ -353,11 +336,9 @@
             });
           }
           
-          // Применяем сортировку
           const groupKeys = Object.keys(groupDataMap);
           const sortedKeys = sortGroupData(groupKeys);
           
-          // Формируем HTML строк
           for (const groupKey of sortedKeys) {
             const group = groupDataMap[groupKey];
             const isChecked = group.guids.every(guid => selectedGuids.has(guid));
@@ -371,13 +352,8 @@
           }
         }
         
-        // Одна операция DOM вместо множества
         selectionTable.innerHTML = html;
-        
-        // Обновляем индикаторы сортировки
         updateSortIndicators();
-        
-        // Обновляем состояние чекбокса "выбрать всё"
         updateSelectAllCheckbox();
       }).catch(err => console.log('[UI] GetSelectedElements error: ' + err));
     }
@@ -396,10 +372,8 @@
       
       const group = groupDataMap[groupKey];
       if (checkbox.checked) {
-        // Добавляем все GUID этой группы
         group.guids.forEach(guid => selectedGuids.add(guid));
       } else {
-        // Удаляем все GUID этой группы
         group.guids.forEach(guid => selectedGuids.delete(guid));
       }
       
@@ -449,11 +423,9 @@
         const checkbox = document.querySelector('input[type="checkbox"][data-group="' + escapeHtml(groupKey) + '"]');
         
         if (isChecked) {
-          // Добавляем все GUID всех групп
           group.guids.forEach(guid => selectedGuids.add(guid));
           if (checkbox) checkbox.checked = true;
         } else {
-          // Удаляем все GUID всех групп
           group.guids.forEach(guid => selectedGuids.delete(guid));
           if (checkbox) checkbox.checked = false;
         }
@@ -480,7 +452,6 @@
           const requested = result.requested || guidsArray.length;
           setInfo("selection-info", "Выделение применено: " + applied + " из " + requested + " элементов");
           
-          // Опционально: обновляем таблицу после применения
           setTimeout(UpdateSelectedElements, 500);
         } else {
           setInfo("selection-info", "Выделение применено");
@@ -527,12 +498,10 @@
       }, 50);
     }
 
-    // Инициализация при загрузке
     whenACAPIReadyDo(function() {
       UpdateSelectedElements();
     });
 
-    // Обработчик для кнопки справки (делегирование событий)
     document.addEventListener('click', function(e) {
       const el = e.target.closest('[data-help-url]');
       if (!el) return;
@@ -547,16 +516,12 @@
       if (A && typeof A.OpenHelp === 'function') {
         Promise
           .resolve(A.OpenHelp(url))
-          .then(() => {
-            // Успешно открыто
-          })
+          .then(() => {})
           .catch(err => {
             console.log('[UI] ACAPI.OpenHelp error: ' + err);
-            // Fallback на window.open если ошибка
             window.open(url, '_blank', 'noopener,noreferrer');
           });
       } else {
-        // Fallback если ACAPI недоступен
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     });
@@ -595,5 +560,3 @@
 </div>
 </body>
 </html>
-
-

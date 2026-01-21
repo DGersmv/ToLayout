@@ -13,17 +13,8 @@
 #include	"ResourceIDs.hpp"
 #include	"BrowserRepl.hpp"
 #include    "HelpPalette.hpp"  
-#include    "DistributionPalette.hpp"
-#include    "OrientationPalette.hpp"
-#include    "GroundPalette.hpp"
-#include    "MarkupPalette.hpp"
-#include    "ContourPalette.hpp"
-#include    "MeshPalette.hpp"
 #include    "IdLayersPalette.hpp"
-#include    "AnglePalette.hpp"
-#include    "SendXlsPalette.hpp"
 #include    "SelectionDetailsPalette.hpp"
-#include    "RandomizerPalette.hpp"
 #include    "LicenseManager.hpp"
 #include	"APICommon.h"
 
@@ -80,85 +71,28 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 #endif
 	
 	// Проверяем лицензию/демо перед выполнением команд (кроме Support и Toolbar)
+	// ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ РАЗРАБОТКИ
+	#if 0
 	if (!g_isLicenseValid && g_isDemoExpired) {
 		short itemIndex = menuParams->menuItemRef.itemIndex;
-		// Разрешаем только Support (12) и Toolbar (BrowserReplMenuItemIndex)
-		if (itemIndex != 12 && itemIndex != BrowserReplMenuItemIndex) {
+		// Разрешаем только Support (2) и Toolbar (BrowserReplMenuItemIndex = 3)
+		if (itemIndex != 2 && itemIndex != BrowserReplMenuItemIndex) {
 			ACAPI_WriteReport("Demo period expired. Please purchase a license.", true);
 			return NoError;
 		}
 	}
+	#endif
 	
 	switch (menuParams->menuItemRef.menuResID) {
 		case BrowserReplMenuResId:
 			switch (menuParams->menuItemRef.itemIndex) {
-				case 1:  // "Selection Details"
+				case 1:  // "Таблица выделенного" (Selection Details)
 #ifdef DEBUG_UI_LOGS
 					ACAPI_WriteReport("[Main] Handling Selection Details menu item", false);
 #endif
 					SelectionDetailsPalette::ShowPalette();
 					break;
-				case 2:  // "Distribution"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Distribution menu item", false);
-#endif
-					DistributionPalette::ShowPalette();
-					break;
-				case 3:  // "Orientation"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Orientation menu item", false);
-#endif
-					OrientationPalette::ShowPalette();
-					break;
-				case 4:  // "Angle"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Angle menu item", false);
-#endif
-					AnglePalette::ShowPalette();
-					break;
-				case 5:  // "Ground"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Ground menu item", false);
-#endif
-					GroundPalette::ShowPalette();
-					break;
-				case 6:  // "Markup"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Markup menu item", false);
-#endif
-					MarkupPalette::ShowPalette();
-					break;
-				case 7:  // "ID & Layers"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling ID & Layers menu item", false);
-#endif
-					IdLayersPalette::ShowPalette();
-					break;
-				case 8:  // "Contour"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Contour menu item", false);
-#endif
-					ContourPalette::ShowPalette();
-					break;
-				case 9:  // "Mesh"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Mesh menu item", false);
-#endif
-					MeshPalette::ShowPalette();
-					break;
-				case 10:  // "Send to Excel"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Send to Excel menu item", false);
-#endif
-					SendXlsPalette::ShowPalette();
-					break;
-				case 11:  // "Randomizer"
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Randomizer menu item", false);
-#endif
-					RandomizerPalette::ShowPalette();
-					break;
-				case 12:  // "Support"
+				case 2:  // "Поддержка" (Support)
 					{
 						GS::UniString url = LicenseManager::BuildLicenseUrl();
 						
@@ -260,25 +194,18 @@ GSErrCode Initialize ()
     g_isDemoExpired = isDemoExpired;
     
     // Если ни лицензия, ни демо не активны - отключаем меню (кроме Support и Toolbar)
+    // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ РАЗРАБОТКИ
+    #if 0
     if (!isLicenseValid && isDemoExpired) {
-        // Отключаем все пункты меню кроме Support (12) и Toolbar (BrowserReplMenuItemIndex)
+        // Отключаем Таблица выделенного (1)
+        // Support (2) и Toolbar (3) остаются активными
         DisableEnableMenuItem(BrowserReplMenuResId, 1, true);   // Selection Details
-        DisableEnableMenuItem(BrowserReplMenuResId, 2, true);   // Distribution
-        DisableEnableMenuItem(BrowserReplMenuResId, 3, true);   // Orientation
-        DisableEnableMenuItem(BrowserReplMenuResId, 4, true);   // Angle
-        DisableEnableMenuItem(BrowserReplMenuResId, 5, true);   // Ground
-        DisableEnableMenuItem(BrowserReplMenuResId, 6, true);   // Markup
-        DisableEnableMenuItem(BrowserReplMenuResId, 7, true);   // ID & Layers
-        DisableEnableMenuItem(BrowserReplMenuResId, 8, true);   // Contour
-        DisableEnableMenuItem(BrowserReplMenuResId, 9, true);   // Mesh
-        DisableEnableMenuItem(BrowserReplMenuResId, 10, true);   // Send to Excel
-        DisableEnableMenuItem(BrowserReplMenuResId, 11, true);  // Randomizer
-        // Support (12) и Toolbar (BrowserReplMenuItemIndex) остаются активными
         
         GS::UniString supportUrl = LicenseManager::BuildLicenseUrl();
         ACAPI_WriteReport("Demo period expired. Please purchase a license. Support: ", false);
         ACAPI_WriteReport(supportUrl.ToCStr().Get(), false);
     }
+    #endif
 
     // 1) Меню
     GSErrCode err = ACAPI_MenuItem_InstallMenuHandler (BrowserReplMenuResId, MenuCommandHandler);
@@ -292,17 +219,8 @@ GSErrCode Initialize ()
     GSErrCode palErr = NoError;
     palErr |= BrowserRepl::RegisterPaletteControlCallBack ();
     palErr |= HelpPalette::RegisterPaletteControlCallBack ();
-    palErr |= DistributionPalette::RegisterPaletteControlCallBack ();
-    palErr |= OrientationPalette::RegisterPaletteControlCallBack ();
-    palErr |= GroundPalette::RegisterPaletteControlCallBack ();
-    palErr |= MarkupPalette::RegisterPaletteControlCallBack ();
-    palErr |= ContourPalette::RegisterPaletteControlCallBack ();
-    palErr |= MeshPalette::RegisterPaletteControlCallBack ();
     palErr |= IdLayersPalette::RegisterPaletteControlCallBack ();
-    palErr |= AnglePalette::RegisterPaletteControlCallBack ();
-	palErr |= SendXlsPalette::RegisterPaletteControlCallBack ();
 	palErr |= SelectionDetailsPalette::RegisterPaletteControlCallBack ();
-	palErr |= RandomizerPalette::RegisterPaletteControlCallBack ();
 
     if (DBERROR (palErr != NoError))
         return palErr;

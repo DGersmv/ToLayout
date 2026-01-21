@@ -55,7 +55,7 @@ static GSErrCode HelpPalette_CB(Int32 /*refCon*/, API_PaletteMessageID messageID
 
 // -------------------- static members --------------------
 GS::Ref<HelpPalette> HelpPalette::s_instance(nullptr);
-const GS::Guid HelpPalette::s_guid("{06a4b1bb-f5ca-400b-bab5-ce65186d5d7e}");
+const GS::Guid HelpPalette::s_guid("{ea5a4d6f-ca70-8a9d-beef-3a4a2c3d4e5f}");
 
 // -------------------- ctor / dtor --------------------
 HelpPalette::HelpPalette()
