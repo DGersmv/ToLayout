@@ -1,4 +1,4 @@
-﻿#include "SelectionHelper.hpp"
+#include "SelectionHelper.hpp"
 
 namespace SelectionHelper {
 
@@ -130,6 +130,34 @@ ApplyCheckedSelectionResult ApplyCheckedSelection (const GS::Array<API_Guid>& gu
     // Выделяем все элементы одним батчем
     ACAPI_Selection_Select(neigs, true);
     result.applied = static_cast<UInt32>(neigs.GetSize());
+
+    return result;
+}
+
+// ---------------- Обновить ID элементов по списку GUID ----------------
+UpdateElementsIdResult UpdateElementsID (const GS::Array<API_Guid>& guids, const GS::UniString& newID)
+{
+    UpdateElementsIdResult result;
+    result.requested = static_cast<UInt32>(guids.GetSize());
+    result.updated = 0;
+
+    if (guids.IsEmpty() || newID.IsEmpty()) {
+        return result;
+    }
+
+    GSErrCode err = ACAPI_CallUndoableCommand("Change Elements ID", [&]() -> GSErrCode {
+        for (UIndex i = 0; i < guids.GetSize(); ++i) {
+            GS::UniString id = newID;
+            if (ACAPI_Element_ChangeElementInfoString(&guids[i], &id) == NoError) {
+                result.updated++;
+            }
+        }
+        return NoError;
+    });
+
+    if (err != NoError) {
+        result.updated = 0;
+    }
 
     return result;
 }
