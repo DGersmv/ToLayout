@@ -1,4 +1,4 @@
-﻿#include "ACAPinc.h"
+#include "ACAPinc.h"
 #include "APICommon.h"
 #include "BrowserRepl.hpp"
 #include "DGBrowser.hpp"
@@ -222,6 +222,33 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		const GS::UniString baseID = GetStringFromJavaScriptVariable(param);
 		const bool success = SelectionHelper::ChangeSelectedElementsID(baseID);
 		return ConvertToJavaScriptVariable(success);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("SetElementsID", [](GS::Ref<JS::Base> param) {
+		GS::Array<API_Guid> guids;
+		GS::UniString newId;
+
+		if (GS::Ref<JS::Array> params = GS::DynamicCast<JS::Array>(param)) {
+			const GS::Array<GS::Ref<JS::Base>>& items = params->GetItemArray();
+			if (items.GetSize() >= 2) {
+				GS::Array<GS::UniString> guidStrings = GetStringArrayFromJavaScriptVariable(items[0]);
+				newId = GetStringFromJavaScriptVariable(items[1]);
+				newId.Trim();
+
+				for (UIndex i = 0; i < guidStrings.GetSize(); ++i) {
+					API_Guid guid = APIGuidFromString(guidStrings[i].ToCStr().Get());
+					if (guid != APINULLGuid) {
+						guids.Push(guid);
+					}
+				}
+			}
+		}
+
+		SelectionHelper::UpdateElementsIdResult result = SelectionHelper::UpdateElementsID(guids, newId);
+		GS::Ref<JS::Object> jsResult = new JS::Object();
+		jsResult->AddItem("updated", ConvertToJavaScriptVariable((Int32)result.updated));
+		jsResult->AddItem("requested", ConvertToJavaScriptVariable((Int32)result.requested));
+		return jsResult;
 		}));
 
 	jsACAPI->AddItem(new JS::Function("ApplyCheckedSelection", [](GS::Ref<JS::Base> param) {
