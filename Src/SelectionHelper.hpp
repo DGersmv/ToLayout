@@ -1,4 +1,4 @@
-﻿#ifndef SELECTIONHELPER_HPP
+#ifndef SELECTIONHELPER_HPP
 #define SELECTIONHELPER_HPP
 
 #include "APIEnvir.h"
@@ -33,6 +33,15 @@ namespace SelectionHelper {
 
     // Применить выделение по списку GUID
     ApplyCheckedSelectionResult ApplyCheckedSelection (const GS::Array<API_Guid>& guids);
+
+    // Результат обновления ID по списку GUID
+    struct UpdateElementsIdResult {
+        UInt32 updated;    // Успешно обновлено
+        UInt32 requested;  // Запрошено
+    };
+
+    // Обновить ID элементов по списку GUID
+    UpdateElementsIdResult UpdateElementsID (const GS::Array<API_Guid>& guids, const GS::UniString& newID);
 
 } // namespace SelectionHelper
 
