@@ -93,6 +93,20 @@
       border: 1px solid #c8c4c0;
       padding: 4px 6px;
     }
+    table.selection-table tbody td.editable-id {
+      cursor: text;
+    }
+    table.selection-table tbody td.editable-id.editing {
+      padding: 2px;
+      background: #fffaf0;
+    }
+    table.selection-table tbody td.editable-id .id-editor {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #7f9db9;
+      font-size: 11px;
+      padding: 2px 4px;
+    }
     table.selection-table tbody tr:hover td {
       background: #f3f1ee;
     }
@@ -191,6 +205,107 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function startIdEdit(cell) {
+      if (!cell || cell.classList.contains('editing')) {
+        return;
+      }
+
+      const groupKey = cell.getAttribute('data-group');
+      if (!groupKey || !groupDataMap[groupKey]) {
+        return;
+      }
+
+      const oldId = (cell.textContent || '').trim();
+      cell.dataset.originalId = oldId;
+      cell.classList.add('editing');
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'id-editor';
+      input.value = oldId;
+      input.setAttribute('aria-label', 'ID');
+
+      cell.textContent = '';
+      cell.appendChild(input);
+      input.focus();
+      input.select();
+
+      const finish = (apply) => finishIdEdit(cell, apply);
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          finish(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          finish(false);
+        }
+      });
+
+      input.addEventListener('blur', () => finish(true));
+    }
+
+    function finishIdEdit(cell, apply) {
+      if (!cell || !cell.classList.contains('editing')) {
+        return;
+      }
+
+      const input = cell.querySelector('input.id-editor');
+      const oldId = cell.dataset.originalId || '';
+      const newId = input ? input.value.trim() : oldId;
+
+      cell.classList.remove('editing');
+
+      if (!apply) {
+        cell.textContent = oldId;
+        return;
+      }
+
+      if (!newId) {
+        cell.textContent = oldId;
+        setInfo('selection-info', 'ID не может быть пустым.');
+        return;
+      }
+
+      if (newId === oldId) {
+        cell.textContent = oldId;
+        return;
+      }
+
+      cell.textContent = newId;
+      commitIdChange(cell.getAttribute('data-group'), newId);
+    }
+
+    function commitIdChange(groupKey, newId) {
+      const A = window.ACAPI;
+      if (!A || typeof A.SetElementsID !== 'function') {
+        setInfo('selection-info', 'Функция изменения ID недоступна. Обновите плагин.');
+        return;
+      }
+
+      const group = groupDataMap[groupKey];
+      if (!group || !Array.isArray(group.guids) || group.guids.length === 0) {
+        setInfo('selection-info', 'Не найдены элементы для изменения ID.');
+        return;
+      }
+
+      setInfo('selection-info', 'Обновление ID...');
+
+      A.SetElementsID([group.guids, newId]).then(result => {
+        const updated = (result && typeof result.updated === 'number') ? result.updated : 0;
+        const requested = (result && typeof result.requested === 'number') ? result.requested : group.guids.length;
+        if (updated === 0) {
+          setInfo('selection-info', 'Не удалось обновить ID. Проверьте права и выделение.');
+        } else {
+          setInfo('selection-info', 'ID обновлены: ' + updated + ' из ' + requested);
+        }
+        setTimeout(UpdateSelectedElements, 200);
+      }).catch(err => {
+        setInfo('selection-info', 'Ошибка обновления ID: ' + err);
+        setTimeout(UpdateSelectedElements, 200);
+      });
     }
 
     // =============== sorting ===============
@@ -345,7 +460,7 @@
             html += '<tr data-group="' + escapeHtml(groupKey) + '">' +
               '<td><input type="checkbox" data-group="' + escapeHtml(groupKey) + '" ' + (isChecked ? 'checked' : '') + ' onchange="handleRowCheckboxChange(this)"></td>' +
               '<td>' + escapeHtml(group.type) + '</td>' +
-              '<td>' + escapeHtml(group.id) + '</td>' +
+              '<td class="editable-id" data-group="' + escapeHtml(groupKey) + '" title="Двойной клик, чтобы изменить ID">' + escapeHtml(group.id) + '</td>' +
               '<td>' + escapeHtml(group.layer) + '</td>' +
               '<td class="count-cell" onclick="toggleRowCheckbox(\'' + escapeHtml(groupKey) + '\')">' + group.count + '</td>' +
               '</tr>';
@@ -524,6 +639,12 @@
       } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
+    });
+
+    document.addEventListener('dblclick', function(e) {
+      const cell = e.target.closest('td.editable-id');
+      if (!cell) return;
+      startIdEdit(cell);
     });
   </script>
 </head>
