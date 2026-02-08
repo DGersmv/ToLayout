@@ -1,4 +1,4 @@
-﻿// *****************************************************************************
+// *****************************************************************************
 // Source code for the Browser Control Test Add-On
 // *****************************************************************************
 
@@ -12,9 +12,11 @@
 #include	"ACAPinc.h"		// also includes APIdefs.h
 #include	"ResourceIDs.hpp"
 #include	"BrowserRepl.hpp"
+#include	"LayoutHelper.hpp"
 #include    "HelpPalette.hpp"  
 #include    "IdLayersPalette.hpp"
 #include    "SelectionDetailsPalette.hpp"
+#include    "ToLayoutPalette.hpp"
 #include    "LicenseManager.hpp"
 #include	"APICommon.h"
 
@@ -75,8 +77,8 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 	#if 0
 	if (!g_isLicenseValid && g_isDemoExpired) {
 		short itemIndex = menuParams->menuItemRef.itemIndex;
-		// Разрешаем только Support (2) и Toolbar (BrowserReplMenuItemIndex = 3)
-		if (itemIndex != 2 && itemIndex != BrowserReplMenuItemIndex) {
+		// Разрешаем только Support (3) и Toolbar (4)
+		if (itemIndex != 3 && itemIndex != 4) {
 			ACAPI_WriteReport("Demo period expired. Please purchase a license.", true);
 			return NoError;
 		}
@@ -86,13 +88,12 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 	switch (menuParams->menuItemRef.menuResID) {
 		case BrowserReplMenuResId:
 			switch (menuParams->menuItemRef.itemIndex) {
-				case 1:  // "Таблица выделенного" (Selection Details)
-#ifdef DEBUG_UI_LOGS
-					ACAPI_WriteReport("[Main] Handling Selection Details menu item", false);
-#endif
-					SelectionDetailsPalette::ShowPalette();
+				case 1:  // "Расположить в макете"
+					ToLayoutPalette::ShowPalette();
 					break;
-				case 2:  // "Поддержка" (Support)
+				case 2:  // "Создать 3D вид" — позже
+					break;
+				case 3:  // "Поддержка" (Support)
 					{
 						GS::UniString url = LicenseManager::BuildLicenseUrl();
 						
@@ -103,7 +104,7 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 						HelpPalette::ShowWithURL(url);
 					}
 					break;
-				case BrowserReplMenuItemIndex:  // "Toolbar" - opens/closes palette 32500
+				case 4:  // "Toolbar" (BrowserReplMenuItemIndex) - opens/closes palette 32500
 #ifdef DEBUG_UI_LOGS
 					ACAPI_WriteReport("[Main] Handling Toolbar menu item", false);
 #endif
@@ -221,6 +222,7 @@ GSErrCode Initialize ()
     palErr |= HelpPalette::RegisterPaletteControlCallBack ();
     palErr |= IdLayersPalette::RegisterPaletteControlCallBack ();
 	palErr |= SelectionDetailsPalette::RegisterPaletteControlCallBack ();
+	palErr |= ToLayoutPalette::RegisterPaletteControlCallBack ();
 
     if (DBERROR (palErr != NoError))
         return palErr;

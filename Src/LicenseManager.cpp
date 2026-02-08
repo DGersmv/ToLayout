@@ -371,8 +371,8 @@ LicenseManager::LicenseStatus LicenseManager::CheckLicense(LicenseData& licenseD
 		return LicenseStatus::ComputerMismatch;
 	}
 
-	// Проверяем название плагина (ожидаем SelectionTable_AC27, LandscapeHelper_AC27 или Browser_Repl_Int)
-	GS::UniString expectedPluginName1 = GS::UniString("SelectionTable_AC27");
+	// Проверяем название плагина (ожидаем ToLayout_AC27, LandscapeHelper_AC27 или Browser_Repl_Int)
+	GS::UniString expectedPluginName1 = GS::UniString("ToLayout_AC27");
 	GS::UniString expectedPluginName2 = GS::UniString("LandscapeHelper_AC27");
 	GS::UniString expectedPluginName3 = GS::UniString("Browser_Repl_Int");
 	if (licenseData.pluginName != expectedPluginName1 && 

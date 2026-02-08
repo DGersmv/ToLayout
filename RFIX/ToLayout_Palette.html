@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Расположить в макете</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #efefef;
+      margin: 0;
+      padding: 12px;
+      color: #2f2f2f;
+      font-size: 12px;
+    }
+    .palette {
+      width: 360px;
+    }
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .section {
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: #54524f;
+    }
+    .selection-list {
+      max-height: 140px;
+      overflow-y: auto;
+      border: 1px solid #c8c4c0;
+      background: #fff;
+      padding: 4px;
+    }
+    .selection-list table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .selection-list th {
+      text-align: left;
+      background: #dcd9d4;
+      padding: 4px 6px;
+      border: 1px solid #b6b2ae;
+    }
+    .selection-list td {
+      padding: 4px 6px;
+      border: 1px solid #c8c4c0;
+    }
+    .selection-list tbody tr:hover td {
+      background: #f3f1ee;
+    }
+    .empty-msg {
+      color: #888;
+      padding: 12px;
+      text-align: center;
+    }
+    select.layout-select, input.text-input {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 12px;
+      border: 1px solid #a8a5a2;
+      background: #fff;
+    }
+    input.text-input {
+      margin-top: 4px;
+    }
+    .input-row {
+      margin-bottom: 8px;
+    }
+    .button-ok {
+      width: 100%;
+      padding: 8px 12px;
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid #4f604f;
+      background: linear-gradient(to bottom, #7a997a 0%, #5a7a5a 100%);
+      color: #fff;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .button-ok:hover {
+      background: linear-gradient(to bottom, #8aaa8a 0%, #6a8a6a 100%);
+    }
+    .button-ok:disabled {
+      background: #c0c0c0;
+      border-color: #a0a0a0;
+      cursor: default;
+    }
+    .info-msg {
+      margin-top: 8px;
+      padding: 6px;
+      font-size: 11px;
+      min-height: 20px;
+    }
+    .radio-row {
+      margin: 6px 0;
+    }
+    .radio-row input {
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+<div class="palette">
+  <h1>Расположить в макете</h1>
+  <p style="font-size:11px;color:#666;margin:0 0 10px;">Окройте план, разрез или фасад — он будет размещён как связанный вид.</p>
+
+  <div class="section">
+    <div class="section-title">Выделенные элементы</div>
+    <div class="selection-list" id="selection-list">
+      <div class="empty-msg">Загрузка…</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Шаблон макета (Основные)</div>
+    <select class="layout-select" id="master-select">
+      <option value="-1">Загрузка…</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Имя макета</div>
+    <input type="text" class="text-input" id="layout-name" placeholder="Noviy maket (ili latinica)" />
+  </div>
+
+  <div class="section">
+    <div class="section-title">Имя вида</div>
+    <input type="text" class="text-input" id="drawing-name" placeholder="Vid v maket (ili latinica)" />
+  </div>
+
+  <button class="button-ok" id="btn-ok">OK</button>
+
+  <div class="info-msg" id="info-msg"></div>
+</div>
+
+<script type="text/javascript">
+"use strict";
+
+function setInfo(msg) {
+  var el = document.getElementById('info-msg');
+  if (el) el.textContent = msg || '';
+}
+
+function updateSelectionList() {
+  var A = window.ACAPI;
+  var container = document.getElementById('selection-list');
+  if (!A || typeof A.GetSelectedElements !== 'function') {
+    container.innerHTML = '<div class="empty-msg">ACAPI недоступен</div>';
+    return;
+  }
+
+  A.GetSelectedElements().then(function(elemInfos) {
+    if (!elemInfos || elemInfos.length === 0) {
+      container.innerHTML = '<div class="empty-msg">Нет выбранных элементов</div>';
+      return;
+    }
+
+    var groupMap = {};
+    for (var i = 0; i < elemInfos.length; i++) {
+      var guid = elemInfos[i][0];
+      var typeName = elemInfos[i][1];
+      var elemID = elemInfos[i][2];
+      var layerName = elemInfos[i][3] || '';
+      var key = typeName + '||' + elemID + '||' + layerName;
+      if (!groupMap[key]) {
+        groupMap[key] = { type: typeName, id: elemID, layer: layerName, count: 0 };
+      }
+      groupMap[key].count++;
+    }
+
+    var html = '<table><thead><tr><th>Тип</th><th>ID</th><th>Слой</th><th>Кол-во</th></tr></thead><tbody>';
+    for (var key in groupMap) {
+      var g = groupMap[key];
+      html += '<tr><td>' + escapeHtml(g.type) + '</td><td>' + escapeHtml(g.id) + '</td><td>' + escapeHtml(g.layer) + '</td><td>' + g.count + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }).catch(function() {
+    container.innerHTML = '<div class="empty-msg">Ошибка загрузки</div>';
+  });
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function updateMasterSelect() {
+  var A = window.ACAPI;
+  var sel = document.getElementById('master-select');
+  if (!A || typeof A.GetMasterLayouts !== 'function') {
+    sel.innerHTML = '<option value="-1">GetMasterLayouts недоступен</option>';
+    return;
+  }
+
+  A.GetMasterLayouts().then(function(masters) {
+    sel.innerHTML = '';
+    if (!masters || masters.length === 0) {
+      sel.innerHTML = '<option value="-1">Нет шаблонов макетов</option>';
+      return;
+    }
+    for (var i = 0; i < masters.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = masters[i].index;
+      opt.textContent = masters[i].name || ('Шаблон ' + (i + 1));
+      sel.appendChild(opt);
+    }
+  }).catch(function() {
+    sel.innerHTML = '<option value="-1">Ошибка загрузки</option>';
+  });
+}
+
+function onOkClick() {
+  var A = window.ACAPI;
+  var masterSel = document.getElementById('master-select');
+  var layoutNameEl = document.getElementById('layout-name');
+  var drawingNameEl = document.getElementById('drawing-name');
+
+  if (!A || typeof A.PlaceOnLayout !== 'function') {
+    setInfo('Функция PlaceOnLayout недоступна.');
+    return;
+  }
+
+  var masterIndex = parseInt(masterSel.value, 10);
+  if (masterIndex < 0) {
+    setInfo('Выберите шаблон макета.');
+    return;
+  }
+
+  var layoutName = (layoutNameEl && layoutNameEl.value.trim()) ? layoutNameEl.value.trim() : 'Noviy maket';
+  var drawingName = (drawingNameEl && drawingNameEl.value.trim()) ? drawingNameEl.value.trim() : 'Vid v maket';
+
+  setInfo('Размещение…');
+  document.getElementById('btn-ok').disabled = true;
+
+  var params = {
+    masterLayoutIndex: masterIndex,
+    layoutIndex: 0,
+    layoutName: layoutName,
+    drawingName: drawingName
+  };
+
+  A.PlaceOnLayout(params).then(function(success) {
+    document.getElementById('btn-ok').disabled = false;
+    if (success) {
+      setInfo('Выделение размещено в макете.');
+    } else {
+      setInfo('Не удалось разместить. Проверьте выделение.');
+    }
+  }).catch(function() {
+    document.getElementById('btn-ok').disabled = false;
+    setInfo('Ошибка при размещении.');
+  });
+}
+
+function init() {
+  updateSelectionList();
+  updateMasterSelect();
+
+  document.getElementById('btn-ok').addEventListener('click', onOkClick);
+
+  window.UpdateSelectionList = updateSelectionList;
+}
+
+function whenReady(cb) {
+  if (window.ACAPI && typeof window.ACAPI.GetSelectedElements === 'function') {
+    cb();
+    return;
+  }
+  var n = 0;
+  var iv = setInterval(function() {
+    if (window.ACAPI && typeof window.ACAPI.GetSelectedElements === 'function') {
+      clearInterval(iv);
+      cb();
+    } else if (++n > 100) {
+      clearInterval(iv);
+    }
+  }, 50);
+}
+
+whenReady(init);
+</script>
+</body>
+</html>

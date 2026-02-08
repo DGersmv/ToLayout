@@ -1,39 +1,42 @@
-﻿/* *****************************************************************************
+/* *****************************************************************************
 // Localizable resource description
 // ****************************************************************************/
 
 'STR#' 32000 "Add-on Name and Description" {
-/* [  1] */		"Table Set AC27"
-/* [  2] */		"Table Set AC27 V1.0"
+/* [  1] */		"To Layout AC27"
+/* [  2] */		"To Layout AC27 V1.0"
 }
 
 'STR#' 32501 "Strings for the Menu" {
 /* [   ] */		"227.info"
-/* [   ] */		"Таблицы"
-/* [  1] */		"Таблица выделенного"
-/* [  2] */		"Поддержка"
-/* [  3] */		"Toolbar"
+/* [   ] */		"Работа с макетами"
+/* [  1] */		"Расположить в макете"
+/* [  2] */		"Создать 3D вид"
+/* [  3] */		"Поддержка"
+/* [  4] */		"Toolbar"
 }
 
 /* --- Dockable toolbar palette ----------------------------------------------*/
 
-'GDLG'  32500    Palette | leftCaption | noGrow   0   0  135  32  ""  {
-/* [  0] */ IconButton          3    1   30   30    32111									/* Close button */
+'GDLG'  32500    Palette | leftCaption | noGrow   0   0  165  32  ""  {
+/* [  0] */ IconButton          3    1   30   30    32111									/* Close */
 /* [  1] */ IconButton         33    1   30   30    32100									/* Table - Selection Details */
 /* [  2] */ IconButton         63    1   30   30    32106									/* Layers - ID & Layers */
-/* [  3] */ IconButton         93    1   30   30    32110									/* Support - Help */
+/* [  3] */ IconButton         93    1   30   30    32100									/* To Layout */
+/* [  4] */ IconButton        123    1   30   30    32110									/* Support - Help */
 }
 
 'DLGH'  32500  DLG_32500_Browser_Repl {
 1	"Close"					IconButton_0
 2	"Selection Details"		IconButton_1
 3	"ID & Layers"			IconButton_2
-4	"Support"				IconButton_3
+4	"Расположить в макете"	IconButton_3
+5	"Support"				IconButton_4
 }
 
 /* --- Dockable browser palette: HELP ---------------------------------------*/
 
-'GDLG'  32510    Palette | topCaption | close | grow   0   0  900  700  "Help LandscapeHelper"  {
+'GDLG'  32510    Palette | topCaption | close | grow   0   0  900  700  "Справка To Layout"  {
 /* [  1] */ Browser         0   0  900  700
 }
 
@@ -59,4 +62,14 @@
 
 'DLGH'  32610  DLG_32610_SelectionDetails_Browser {
 1   "SelectionDetails Browser Control"     Browser_0
+}
+
+/* --- Dockable palette: TO LAYOUT ---------------------------------------*/
+
+'GDLG'  32620    Palette | topCaption | close | grow   0   0  360  420  "Расположить в макете"  {
+/* [  1] */ Browser         0   0  360  420
+}
+
+'DLGH'  32620  DLG_32620_ToLayout_Browser {
+1   "ToLayout Browser Control"     Browser_0
 }
