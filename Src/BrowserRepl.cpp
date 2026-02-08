@@ -19,13 +19,15 @@ extern "C" {
 #include "SelectionPropertyHelper.hpp"
 #include "SelectionMetricsHelper.hpp"
 #include "SelectionDetailsPalette.hpp"
+#include "ToLayoutPalette.hpp"
+#include "LayoutHelper.hpp"
 
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
 // --------------------- Palette GUID / Instance ---------------------
-static const GS::Guid paletteGuid("{b7e2a1c3-9d4f-5e6a-8b7c-0d1e2f3a4b5c}");
+static const GS::Guid paletteGuid("{1a2b3c4d-5e6f-7890-abcd-ef1234567890}");
 GS::Ref<BrowserRepl> BrowserRepl::instance;
 
 // --- Extract double from JS::Base (supports 123 / "123.4" / "123,4") ---
@@ -152,6 +154,7 @@ BrowserRepl::BrowserRepl() :
 	buttonClose(GetReference(), ToolbarButtonCloseId),
 	buttonTable(GetReference(), ToolbarButtonTableId),
 	buttonLayers(GetReference(), ToolbarButtonLayersId),
+	buttonLayout(GetReference(), ToolbarButtonLayoutId),
 	buttonSupport(GetReference(), ToolbarButtonSupportId)
 {
 	ACAPI_ProjectOperation_CatchProjectEvent(APINotify_Quit, NotificationHandler);
@@ -352,6 +355,64 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return ConvertToJavaScriptVariable(layers);
 		}));
 
+	// --- Layout API (для палитры To Layout) ---
+	jsACAPI->AddItem(new JS::Function("GetLayouts", [](GS::Ref<JS::Base>) {
+		const GS::Array<LayoutHelper::LayoutItem> layouts = LayoutHelper::GetLayoutList();
+		GS::Ref<JS::Array> jsArr = new JS::Array();
+		for (UIndex i = 0; i < layouts.GetSize(); ++i) {
+			GS::Ref<JS::Object> obj = new JS::Object();
+			obj->AddItem("index", new JS::Value(static_cast<Int32>(i)));
+			obj->AddItem("name", new JS::Value(layouts[i].name));
+			jsArr->AddItem(obj);
+		}
+		return jsArr;
+		}));
+
+	jsACAPI->AddItem(new JS::Function("GetMasterLayouts", [](GS::Ref<JS::Base>) {
+		const GS::Array<LayoutHelper::MasterLayoutItem> masters = LayoutHelper::GetMasterLayoutList();
+		GS::Ref<JS::Array> jsArr = new JS::Array();
+		for (UIndex i = 0; i < masters.GetSize(); ++i) {
+			GS::Ref<JS::Object> obj = new JS::Object();
+			obj->AddItem("index", new JS::Value(static_cast<Int32>(i)));
+			obj->AddItem("name", new JS::Value(masters[i].name));
+			jsArr->AddItem(obj);
+		}
+		return jsArr;
+		}));
+
+	jsACAPI->AddItem(new JS::Function("GetDrawingScale", [](GS::Ref<JS::Base>) {
+		return new JS::Value(LayoutHelper::GetCurrentDrawingScale());
+		}));
+
+	jsACAPI->AddItem(new JS::Function("PlaceOnLayout", [](GS::Ref<JS::Base> param) {
+		LayoutHelper::PlaceParams p = {};
+		p.masterLayoutIndex = -1;
+		p.layoutIndex = 0;
+		p.scale = 100.0;
+		if (GS::Ref<JS::Object> obj = GS::DynamicCast<JS::Object>(param)) {
+			const GS::HashTable<GS::UniString, GS::Ref<JS::Base>>& tbl = obj->GetItemTable();
+			GS::Ref<JS::Base> item;
+			if (tbl.Get("masterLayoutIndex", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
+					p.masterLayoutIndex = static_cast<Int32>(vv->GetInteger());
+			}
+			if (tbl.Get("layoutIndex", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
+					p.layoutIndex = static_cast<Int32>(vv->GetInteger());
+			}
+			if (tbl.Get("scale", &item))
+				p.scale = GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 100.0);
+			if (tbl.Get("drawingName", &item))
+				p.drawingName = GetStringFromJavaScriptVariable(item);
+			if (tbl.Get("layoutName", &item))
+				p.layoutName = GetStringFromJavaScriptVariable(item);
+		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
+			p.layoutIndex = static_cast<Int32>(v->GetInteger());
+		}
+		const bool success = LayoutHelper::PlaceSelectionOnLayoutWithParams(p);
+		return ConvertToJavaScriptVariable(success);
+		}));
+
 	// --- Help / Palette control ---
 	jsACAPI->AddItem(new JS::Function("OpenHelp", [](GS::Ref<JS::Base> param) {
 		GS::UniString url;
@@ -370,6 +431,11 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 
 	jsACAPI->AddItem(new JS::Function("OpenSelectionDetailsPalette", [](GS::Ref<JS::Base>) {
 		SelectionDetailsPalette::ShowPalette();
+		return new JS::Value(true);
+		}));
+
+	jsACAPI->AddItem(new JS::Function("OpenToLayoutPalette", [](GS::Ref<JS::Base>) {
+		ToLayoutPalette::ShowPalette();
 		return new JS::Value(true);
 		}));
 
@@ -403,7 +469,7 @@ void BrowserRepl::ButtonClicked(const DG::ButtonClickEvent& ev)
 
 	// Проверяем лицензию/демо перед выполнением команд (кроме Close и Support)
 	if (!IsLicenseValid() && IsDemoExpired()) {
-		if (buttonId != ToolbarButtonCloseId && buttonId != ToolbarButtonSupportId) {
+		if (buttonId != ToolbarButtonCloseId && buttonId != ToolbarButtonSupportId && buttonId != ToolbarButtonLayoutId) {
 			ACAPI_WriteReport("Demo period expired. Please purchase a license.", true);
 			return;
 		}
@@ -418,6 +484,9 @@ void BrowserRepl::ButtonClicked(const DG::ButtonClickEvent& ev)
 			break;
 		case ToolbarButtonLayersId:
 			IdLayersPalette::ShowPalette();
+			break;
+		case ToolbarButtonLayoutId:
+			ToLayoutPalette::ShowPalette();
 			break;
 		case ToolbarButtonSupportId:
 			{

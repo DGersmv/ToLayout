@@ -1,4 +1,4 @@
-﻿/* *****************************************************************************
+/* *****************************************************************************
 // Non-localizable resource description
 // ****************************************************************************/
 
@@ -6,7 +6,7 @@
 
 'MDID' 32500 "Add-On Identifier" {
 	909404777
-	2905821235_TableSet
+	3235336477_ToLayout
 }
 
 'DATA' 100 "Browser Control Html" {
@@ -19,6 +19,10 @@
 
 'DATA' 200 "Selection Details Palette Html" {
 	"Selection_Details_Palette.html"
+}
+
+'DATA' 210 "ToLayout Palette Html" {
+	"ToLayout_Palette.html"
 }
 
 /* Icons for native toolbar buttons */

@@ -66,7 +66,7 @@ static GSErrCode IdLayersPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID 
 }
 
 GS::Ref<IdLayersPalette> IdLayersPalette::s_instance(nullptr);
-const GS::Guid IdLayersPalette::s_guid("{d9a4c3e5-bf60-7a8c-ad9e-2f3a1b2c3d4e}");
+const GS::Guid IdLayersPalette::s_guid("{3c4d5e6f-7081-9012-cdef-123456789012}");
 
 IdLayersPalette::IdLayersPalette()
 	: DG::Palette(ACAPI_GetOwnResModule(), IdLayersPaletteResId, ACAPI_GetOwnResModule(), s_guid)

@@ -36,10 +36,11 @@ public:
 private:
     static GS::Ref<BrowserRepl> instance;
     
-    // Native icon buttons (4 buttons only)
+    // Native icon buttons
     DG::IconButton buttonClose;
     DG::IconButton buttonTable;
     DG::IconButton buttonLayers;
+    DG::IconButton buttonLayout;
     DG::IconButton buttonSupport;
 
     void SetMenuItemCheckedState(bool isChecked);
