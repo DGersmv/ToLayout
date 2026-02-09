@@ -147,6 +147,76 @@ double GetCurrentDrawingScale ()
 }
 
 // -----------------------------------------------------------------------------
+// Получить имя активного этажа из настроек проекта
+// Возвращает true и заполняет outStoryName, если удалось получить имя этажа
+// -----------------------------------------------------------------------------
+static bool GetActiveStoryName (GS::UniString& outStoryName)
+{
+	API_StoryInfo storyInfo = {};
+	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) != NoError) {
+		if (storyInfo.data != nullptr) BMKillHandle ((GSHandle*) &storyInfo.data);
+		return false;
+	}
+	bool found = false;
+	if (storyInfo.data != nullptr) {
+		API_StoryType* storyData = reinterpret_cast<API_StoryType*> (*storyInfo.data);
+		short offset = storyInfo.actStory - storyInfo.firstStory;
+		short storyCount = storyInfo.lastStory - storyInfo.firstStory + 1;
+		if (offset >= 0 && offset < storyCount) {
+			outStoryName = GS::UniString (storyData[offset].uName);
+			found = !outStoryName.IsEmpty ();
+		}
+		BMKillHandle ((GSHandle*) &storyInfo.data);
+	}
+	return found;
+}
+
+// -----------------------------------------------------------------------------
+// Найти элемент навигатора для активного этажа среди списка story-элементов
+// Сначала ищет по имени этажа, затем по смещению от firstStory
+// -----------------------------------------------------------------------------
+static bool FindStoryNavigatorItemForActiveFloor (const GS::Array<API_NavigatorItem>& storyItems, API_Guid& outGuid)
+{
+	if (storyItems.IsEmpty ())
+		return false;
+
+	// Стратегия 1: сопоставление по имени активного этажа
+	GS::UniString activeStoryName;
+	if (GetActiveStoryName (activeStoryName) && !activeStoryName.IsEmpty ()) {
+		for (UIndex i = 0; i < storyItems.GetSize (); i++) {
+			API_NavigatorItem fullItem = {};
+			if (ACAPI_Navigator_GetNavigatorItem (&storyItems[i].guid, &fullItem) == NoError) {
+				GS::UniString itemName (fullItem.uName);
+				// Навигатор может показывать имя как "1. Первый этаж" или просто "Первый этаж"
+				if (itemName == activeStoryName || itemName.Contains (activeStoryName)) {
+					outGuid = storyItems[i].guid;
+					return true;
+				}
+			}
+		}
+	}
+
+	// Стратегия 2: смещение от firstStory (элементы обычно упорядочены по этажам)
+	API_StoryInfo storyInfo = {};
+	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) == NoError) {
+		short actStory = storyInfo.actStory;
+		short firstStory = storyInfo.firstStory;
+		if (storyInfo.data != nullptr) BMKillHandle ((GSHandle*) &storyInfo.data);
+		short offset = actStory - firstStory;
+		if (offset >= 0 && static_cast<UIndex> (offset) < storyItems.GetSize ()) {
+			outGuid = storyItems[static_cast<UIndex> (offset)].guid;
+			return true;
+		}
+	} else {
+		if (storyInfo.data != nullptr) BMKillHandle ((GSHandle*) &storyInfo.data);
+	}
+
+	// Fallback: первый элемент
+	outGuid = storyItems[0].guid;
+	return true;
+}
+
+// -----------------------------------------------------------------------------
 // Получить Navigator item для текущей БД (план/разрез/фасад)
 // -----------------------------------------------------------------------------
 static bool GetCurrentViewNavigatorItem (API_Guid& outGuid)
@@ -171,6 +241,12 @@ static bool GetCurrentViewNavigatorItem (API_Guid& outGuid)
 	GS::Array<API_NavigatorItem> items;
 	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError || items.IsEmpty ())
 		return false;
+	// Для планов этажей: все этажи имеют одинаковый databaseUnId,
+	// поэтому нужно найти элемент навигатора для активного этажа
+	if (currentDb.typeID == APIWind_FloorPlanID && items.GetSize () > 1) {
+		if (FindStoryNavigatorItemForActiveFloor (items, outGuid))
+			return true;
+	}
 	for (UIndex i = 0; i < items.GetSize (); i++) {
 		if (items[i].db.databaseUnId == currentDb.databaseUnId) {
 			outGuid = items[i].guid;
@@ -207,6 +283,12 @@ static bool GetProjectMapItemForCurrentView (API_Guid& outGuid)
 	GS::Array<API_NavigatorItem> items;
 	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError || items.IsEmpty ())
 		return false;
+	// Для планов этажей: все этажи имеют одинаковый databaseUnId,
+	// поэтому нужно найти элемент навигатора для активного этажа
+	if (currentDb.typeID == APIWind_FloorPlanID && items.GetSize () > 1) {
+		if (FindStoryNavigatorItemForActiveFloor (items, outGuid))
+			return true;
+	}
 	for (UIndex i = 0; i < items.GetSize (); i++) {
 		if (items[i].db.databaseUnId == currentDb.databaseUnId) {
 			outGuid = items[i].guid;
