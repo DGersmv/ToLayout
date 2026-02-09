@@ -373,14 +373,17 @@ static bool GetCurrentViewNavigatorItem (API_Guid& outGuid)
 	GS::Array<API_NavigatorItem> items;
 	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError || items.IsEmpty ())
 		return false;
-	if (FindStoryForSelection (items, currentDb.typeID, outGuid))
-		return true;
+	// Сначала ищем точное совпадение по databaseUnId (текущий активный вид)
 	for (UIndex i = 0; i < items.GetSize (); i++) {
 		if (items[i].db.databaseUnId == currentDb.databaseUnId) {
 			outGuid = items[i].guid;
 			return true;
 		}
 	}
+	// Если не нашли по databaseUnId, пытаемся найти по этажу выделения
+	if (FindStoryForSelection (items, currentDb.typeID, outGuid))
+		return true;
+	// В крайнем случае берём первый элемент
 	if (!items.IsEmpty ())
 		outGuid = items[0].guid;
 	return !items.IsEmpty ();
@@ -411,14 +414,17 @@ static bool GetProjectMapItemForCurrentView (API_Guid& outGuid)
 	GS::Array<API_NavigatorItem> items;
 	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError || items.IsEmpty ())
 		return false;
-	if (FindStoryForSelection (items, currentDb.typeID, outGuid))
-		return true;
+	// Сначала ищем точное совпадение по databaseUnId (текущий активный вид)
 	for (UIndex i = 0; i < items.GetSize (); i++) {
 		if (items[i].db.databaseUnId == currentDb.databaseUnId) {
 			outGuid = items[i].guid;
 			return true;
 		}
 	}
+	// Если не нашли по databaseUnId, пытаемся найти по этажу выделения
+	if (FindStoryForSelection (items, currentDb.typeID, outGuid))
+		return true;
+	// В крайнем случае берём первый элемент
 	if (!items.IsEmpty ())
 		outGuid = items[0].guid;
 	return !items.IsEmpty ();
