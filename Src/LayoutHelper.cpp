@@ -172,6 +172,79 @@ static bool GetSelectionFloorInd (short& outFloorInd)
 }
 
 // -----------------------------------------------------------------------------
+// Получить floorInd активного этажа на плане (не из выделения, а из текущего вида).
+// Определяем этаж по имени текущего story-навигатора и story settings.
+// -----------------------------------------------------------------------------
+static bool GetActiveFloorInd (short& outFloorInd)
+{
+	// Получаем текущую базу данных
+	API_DatabaseInfo currentDb = {};
+	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError)
+		return false;
+	
+	// Проверяем, что это план этажей
+	if (currentDb.typeID != APIWind_FloorPlanID)
+		return false;
+	
+	// Получаем story settings для сопоставления имён и floorInd
+	API_StoryInfo storyInfo = {};
+	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) != NoError)
+		return false;
+	if (storyInfo.data == nullptr) {
+		return false;
+	}
+	
+	API_StoryType* stData = reinterpret_cast<API_StoryType*> (*storyInfo.data);
+	short first  = storyInfo.firstStory;
+	short last   = storyInfo.lastStory;
+	
+	// Ищем текущий story в навигаторе
+	API_NavigatorItem navItem = {};
+	navItem.mapId = API_PublicViewMap;
+	navItem.itemType = API_StoryNavItem;
+	navItem.db = currentDb;
+	GS::Array<API_NavigatorItem> items;
+	bool found = false;
+	
+	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) == NoError) {
+		// Ищем элемент с совпадающим databaseUnId
+		for (UIndex i = 0; i < items.GetSize (); i++) {
+			if (items[i].db.databaseUnId == currentDb.databaseUnId) {
+				// Получаем полную информацию о навигаторном элементе
+				API_NavigatorItem fullItem = {};
+				if (ACAPI_Navigator_GetNavigatorItem (&items[i].guid, &fullItem) == NoError) {
+					GS::UniString currentStoryName (fullItem.uName);
+					
+					// Сопоставляем имя с story settings
+					for (short f = first; f <= last; f++) {
+						short off = f - first;
+						GS::UniString storyName (stData[off].uName);
+						
+						// Пробуем точное совпадение или содержание
+						if (currentStoryName == storyName || currentStoryName.Contains (storyName)) {
+							outFloorInd = f;
+							found = true;
+							
+							char buf[256];
+							std::snprintf (buf, sizeof buf,
+								"[ToLayout] GetActiveFloorInd: floor=%d name='%s'",
+								(int)f, currentStoryName.ToCStr (CC_UTF8).Get ());
+							ACAPI_WriteReport (buf, false);
+							break;
+						}
+					}
+					if (found)
+						break;
+				}
+			}
+		}
+	}
+	
+	BMKillHandle ((GSHandle*) &storyInfo.data);
+	return found;
+}
+
+// -----------------------------------------------------------------------------
 // Найти story-элемент навигатора для целевого этажа (floorInd).
 //
 // Стратегия: Получаем story settings через ACAPI_ProjectSetting_GetStorySettings,
@@ -326,8 +399,8 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 }
 
 // -----------------------------------------------------------------------------
-// Общая обёртка: искать story-элемент навигатора для текущего выделения.
-// Если нет выделения или не план этажей — возвращает false.
+// Общая обёртка: искать story-элемент навигатора для активного этажа плана.
+// Использует активный этаж из вида, а не из выделенных элементов.
 // -----------------------------------------------------------------------------
 static bool FindStoryForSelection (const GS::Array<API_NavigatorItem>& items,
 	API_DatabaseTypeID dbTypeID, API_Guid& outGuid)
@@ -337,15 +410,24 @@ static bool FindStoryForSelection (const GS::Array<API_NavigatorItem>& items,
 	if (items.GetSize () <= 1)
 		return false;
 	short targetFloor = 0;
-	if (!GetSelectionFloorInd (targetFloor)) {
-		ACAPI_WriteReport ("[ToLayout] GetSelectionFloorInd failed", false);
-		return false;
+	// Сначала пытаемся получить активный этаж из плана
+	if (GetActiveFloorInd (targetFloor)) {
+		char b[128];
+		std::snprintf (b, sizeof b, "[ToLayout] active floor floorInd = %d, items = %u",
+			(int)targetFloor, (unsigned)items.GetSize ());
+		ACAPI_WriteReport (b, false);
+		return FindStoryNavItemForFloor (items, targetFloor, outGuid);
 	}
-	char b[128];
-	std::snprintf (b, sizeof b, "[ToLayout] selection floorInd = %d, items = %u",
-		(int)targetFloor, (unsigned)items.GetSize ());
-	ACAPI_WriteReport (b, false);
-	return FindStoryNavItemForFloor (items, targetFloor, outGuid);
+	// Fallback: пробуем получить этаж из выделенных элементов
+	if (GetSelectionFloorInd (targetFloor)) {
+		char b[128];
+		std::snprintf (b, sizeof b, "[ToLayout] selection floorInd = %d, items = %u",
+			(int)targetFloor, (unsigned)items.GetSize ());
+		ACAPI_WriteReport (b, false);
+		return FindStoryNavItemForFloor (items, targetFloor, outGuid);
+	}
+	ACAPI_WriteReport ("[ToLayout] Failed to get floor from active view or selection", false);
+	return false;
 }
 
 // -----------------------------------------------------------------------------
