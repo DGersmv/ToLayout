@@ -191,6 +191,9 @@ static bool GetActiveFloorInd (short& outFloorInd)
 	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) != NoError)
 		return false;
 	if (storyInfo.data == nullptr) {
+		// Освобождаем memory handle даже если data == nullptr
+		if (storyInfo.data != nullptr)
+			BMKillHandle ((GSHandle*) &storyInfo.data);
 		return false;
 	}
 	
@@ -215,24 +218,45 @@ static bool GetActiveFloorInd (short& outFloorInd)
 				if (ACAPI_Navigator_GetNavigatorItem (&items[i].guid, &fullItem) == NoError) {
 					GS::UniString currentStoryName (fullItem.uName);
 					
-					// Сопоставляем имя с story settings
+					// Сначала пробуем точное совпадение
 					for (short f = first; f <= last; f++) {
 						short off = f - first;
 						GS::UniString storyName (stData[off].uName);
 						
-						// Пробуем точное совпадение или содержание
-						if (currentStoryName == storyName || currentStoryName.Contains (storyName)) {
+						if (currentStoryName == storyName) {
 							outFloorInd = f;
 							found = true;
 							
-							char buf[256];
+							char buf[512];
 							std::snprintf (buf, sizeof buf,
-								"[ToLayout] GetActiveFloorInd: floor=%d name='%s'",
+								"[ToLayout] GetActiveFloorInd (exact): floor=%d name='%s'",
 								(int)f, currentStoryName.ToCStr (CC_UTF8).Get ());
 							ACAPI_WriteReport (buf, false);
 							break;
 						}
 					}
+					
+					// Если точное совпадение не найдено, пробуем с префиксом (например "1. Этаж 1")
+					if (!found) {
+						for (short f = first; f <= last; f++) {
+							short off = f - first;
+							GS::UniString storyName (stData[off].uName);
+							
+							// Проверяем, что имя заканчивается на storyName (избегаем ложных совпадений)
+							if (currentStoryName.EndsWith (storyName)) {
+								outFloorInd = f;
+								found = true;
+								
+								char buf[512];
+								std::snprintf (buf, sizeof buf,
+									"[ToLayout] GetActiveFloorInd (suffix): floor=%d name='%s'",
+									(int)f, currentStoryName.ToCStr (CC_UTF8).Get ());
+								ACAPI_WriteReport (buf, false);
+								break;
+							}
+						}
+					}
+					
 					if (found)
 						break;
 				}
