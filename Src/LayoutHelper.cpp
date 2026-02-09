@@ -190,12 +190,8 @@ static bool GetActiveFloorInd (short& outFloorInd)
 	API_StoryInfo storyInfo = {};
 	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) != NoError)
 		return false;
-	if (storyInfo.data == nullptr) {
-		// Освобождаем memory handle даже если data == nullptr
-		if (storyInfo.data != nullptr)
-			BMKillHandle ((GSHandle*) &storyInfo.data);
+	if (storyInfo.data == nullptr)
 		return false;
-	}
 	
 	API_StoryType* stData = reinterpret_cast<API_StoryType*> (*storyInfo.data);
 	short first  = storyInfo.firstStory;
@@ -227,10 +223,12 @@ static bool GetActiveFloorInd (short& outFloorInd)
 							outFloorInd = f;
 							found = true;
 							
+							// Сохраняем указатель перед использованием в snprintf
+							const char* nameStr = currentStoryName.ToCStr (CC_UTF8).Get ();
 							char buf[512];
 							std::snprintf (buf, sizeof buf,
 								"[ToLayout] GetActiveFloorInd (exact): floor=%d name='%s'",
-								(int)f, currentStoryName.ToCStr (CC_UTF8).Get ());
+								(int)f, nameStr);
 							ACAPI_WriteReport (buf, false);
 							break;
 						}
@@ -247,10 +245,12 @@ static bool GetActiveFloorInd (short& outFloorInd)
 								outFloorInd = f;
 								found = true;
 								
+								// Сохраняем указатель перед использованием в snprintf
+								const char* nameStr = currentStoryName.ToCStr (CC_UTF8).Get ();
 								char buf[512];
 								std::snprintf (buf, sizeof buf,
 									"[ToLayout] GetActiveFloorInd (suffix): floor=%d name='%s'",
-									(int)f, currentStoryName.ToCStr (CC_UTF8).Get ());
+									(int)f, nameStr);
 								ACAPI_WriteReport (buf, false);
 								break;
 							}
