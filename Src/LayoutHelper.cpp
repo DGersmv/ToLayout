@@ -179,23 +179,37 @@ static bool GetActiveFloorInd (short& outFloorInd)
 {
 	// Получаем текущую базу данных
 	API_DatabaseInfo currentDb = {};
-	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError)
+	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError) {
+		ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd: GetCurrentDatabase failed", false);
 		return false;
+	}
 	
 	// Проверяем, что это план этажей
-	if (currentDb.typeID != APIWind_FloorPlanID)
+	if (currentDb.typeID != APIWind_FloorPlanID) {
+		char buf[128];
+		std::snprintf (buf, sizeof buf, "[ToLayout] GetActiveFloorInd: not floor plan, typeID=%d", (int)currentDb.typeID);
+		ACAPI_WriteReport (buf, false);
 		return false;
+	}
 	
 	// Получаем story settings для сопоставления имён и floorInd
 	API_StoryInfo storyInfo = {};
-	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) != NoError)
+	if (ACAPI_ProjectSetting_GetStorySettings (&storyInfo) != NoError) {
+		ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd: GetStorySettings failed", false);
 		return false;
-	if (storyInfo.data == nullptr)
+	}
+	if (storyInfo.data == nullptr) {
+		ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd: storyInfo.data is nullptr", false);
 		return false;
+	}
 	
 	API_StoryType* stData = reinterpret_cast<API_StoryType*> (*storyInfo.data);
 	short first  = storyInfo.firstStory;
 	short last   = storyInfo.lastStory;
+	
+	char buf[256];
+	std::snprintf (buf, sizeof buf, "[ToLayout] GetActiveFloorInd: story range [%d..%d]", (int)first, (int)last);
+	ACAPI_WriteReport (buf, false);
 	
 	// Ищем текущий story в навигаторе
 	API_NavigatorItem navItem = {};
@@ -205,63 +219,79 @@ static bool GetActiveFloorInd (short& outFloorInd)
 	GS::Array<API_NavigatorItem> items;
 	bool found = false;
 	
-	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) == NoError) {
-		// Ищем элемент с совпадающим databaseUnId
-		for (UIndex i = 0; i < items.GetSize (); i++) {
-			if (items[i].db.databaseUnId == currentDb.databaseUnId) {
-				// Получаем полную информацию о навигаторном элементе
-				API_NavigatorItem fullItem = {};
-				if (ACAPI_Navigator_GetNavigatorItem (&items[i].guid, &fullItem) == NoError) {
-					GS::UniString currentStoryName (fullItem.uName);
+	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError) {
+		ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd: SearchNavigatorItem failed", false);
+		BMKillHandle ((GSHandle*) &storyInfo.data);
+		return false;
+	}
+	
+	std::snprintf (buf, sizeof buf, "[ToLayout] GetActiveFloorInd: found %u navigator items", (unsigned)items.GetSize ());
+	ACAPI_WriteReport (buf, false);
+	
+	// Ищем элемент с совпадающим databaseUnId
+	bool foundMatch = false;
+	for (UIndex i = 0; i < items.GetSize (); i++) {
+		if (items[i].db.databaseUnId == currentDb.databaseUnId) {
+			foundMatch = true;
+			// Получаем полную информацию о навигаторном элементе
+			API_NavigatorItem fullItem = {};
+			if (ACAPI_Navigator_GetNavigatorItem (&items[i].guid, &fullItem) == NoError) {
+				GS::UniString currentStoryName (fullItem.uName);
+				const char* currentNameStr = currentStoryName.ToCStr (CC_UTF8).Get ();
+				
+				std::snprintf (buf, sizeof buf, "[ToLayout] GetActiveFloorInd: current view name='%s'", currentNameStr);
+				ACAPI_WriteReport (buf, false);
+				
+				// Сначала пробуем точное совпадение
+				for (short f = first; f <= last; f++) {
+					short off = f - first;
+					GS::UniString storyName (stData[off].uName);
 					
-					// Сначала пробуем точное совпадение
+					if (currentStoryName == storyName) {
+						outFloorInd = f;
+						found = true;
+						
+						const char* nameStr = currentStoryName.ToCStr (CC_UTF8).Get ();
+						std::snprintf (buf, sizeof buf,
+							"[ToLayout] GetActiveFloorInd (exact): floor=%d name='%s'",
+							(int)f, nameStr);
+						ACAPI_WriteReport (buf, false);
+						break;
+					}
+				}
+				
+				// Если точное совпадение не найдено, пробуем с префиксом (например "1. Этаж 1")
+				if (!found) {
 					for (short f = first; f <= last; f++) {
 						short off = f - first;
 						GS::UniString storyName (stData[off].uName);
 						
-						if (currentStoryName == storyName) {
+						// Проверяем, что имя заканчивается на storyName (избегаем ложных совпадений)
+						if (currentStoryName.EndsWith (storyName)) {
 							outFloorInd = f;
 							found = true;
 							
-							// Сохраняем указатель перед использованием в snprintf
 							const char* nameStr = currentStoryName.ToCStr (CC_UTF8).Get ();
-							char buf[512];
 							std::snprintf (buf, sizeof buf,
-								"[ToLayout] GetActiveFloorInd (exact): floor=%d name='%s'",
+								"[ToLayout] GetActiveFloorInd (suffix): floor=%d name='%s'",
 								(int)f, nameStr);
 							ACAPI_WriteReport (buf, false);
 							break;
 						}
 					}
-					
-					// Если точное совпадение не найдено, пробуем с префиксом (например "1. Этаж 1")
-					if (!found) {
-						for (short f = first; f <= last; f++) {
-							short off = f - first;
-							GS::UniString storyName (stData[off].uName);
-							
-							// Проверяем, что имя заканчивается на storyName (избегаем ложных совпадений)
-							if (currentStoryName.EndsWith (storyName)) {
-								outFloorInd = f;
-								found = true;
-								
-								// Сохраняем указатель перед использованием в snprintf
-								const char* nameStr = currentStoryName.ToCStr (CC_UTF8).Get ();
-								char buf[512];
-								std::snprintf (buf, sizeof buf,
-									"[ToLayout] GetActiveFloorInd (suffix): floor=%d name='%s'",
-									(int)f, nameStr);
-								ACAPI_WriteReport (buf, false);
-								break;
-							}
-						}
-					}
-					
-					if (found)
-						break;
 				}
+				
+				if (!found) {
+					ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd: no name match found", false);
+				}
+				
+				break; // Found databaseUnId match, stop searching
 			}
 		}
+	}
+	
+	if (!foundMatch) {
+		ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd: no databaseUnId match", false);
 	}
 	
 	BMKillHandle ((GSHandle*) &storyInfo.data);
