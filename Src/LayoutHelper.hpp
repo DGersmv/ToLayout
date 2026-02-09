@@ -29,11 +29,20 @@ namespace LayoutHelper {
 
 	/** Параметры размещения из палитры */
 	struct PlaceParams {
+		/** Точка привязки вида на макете: углы + центр */
+		enum class Anchor {
+			LeftBottom = 0,  // LB
+			LeftTop,         // LT
+			RightTop,        // RT
+			RightBottom,     // RB
+			Middle           // MM (центр)
+		};
 		Int32 masterLayoutIndex;    // индекс шаблона (0-based), -1 = использовать существующий layoutIndex
 		Int32 layoutIndex;          // индекс существующего макета (если masterLayoutIndex < 0)
 		GS::UniString layoutName;   // имя для нового макета
 		double scale;               // 100 = 1:100
 		GS::UniString drawingName;  // имя вида (заголовок Drawing)
+		Anchor anchorPosition = Anchor::LeftBottom;
 	};
 
 	/**

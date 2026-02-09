@@ -183,6 +183,88 @@ static bool GetCurrentViewNavigatorItem (API_Guid& outGuid)
 }
 
 // -----------------------------------------------------------------------------
+// Найти элемент в Project Map для клонирования (источник для View Map)
+// -----------------------------------------------------------------------------
+static bool GetProjectMapItemForCurrentView (API_Guid& outGuid)
+{
+	API_DatabaseInfo currentDb = {};
+	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError)
+		return false;
+	API_NavigatorItemTypeID itemType = API_UndefinedNavItem;
+	switch (currentDb.typeID) {
+		case APIWind_FloorPlanID:      itemType = API_StoryNavItem; break;
+		case APIWind_SectionID:        itemType = API_SectionNavItem; break;
+		case APIWind_ElevationID:      itemType = API_ElevationNavItem; break;
+		case APIWind_InteriorElevationID: itemType = API_InteriorElevationNavItem; break;
+		case APIWind_DetailID:         itemType = API_DetailDrawingNavItem; break;
+		case APIWind_WorksheetID:      itemType = API_WorksheetDrawingNavItem; break;
+		default: return false;
+	}
+	API_NavigatorItem navItem = {};
+	navItem.mapId = API_ProjectMap;
+	navItem.itemType = itemType;
+	navItem.db = currentDb;
+	GS::Array<API_NavigatorItem> items;
+	if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError || items.IsEmpty ())
+		return false;
+	for (UIndex i = 0; i < items.GetSize (); i++) {
+		if (items[i].db.databaseUnId == currentDb.databaseUnId) {
+			outGuid = items[i].guid;
+			return true;
+		}
+	}
+	if (!items.IsEmpty ())
+		outGuid = items[0].guid;
+	return !items.IsEmpty ();
+}
+
+// -----------------------------------------------------------------------------
+// Вычислить bounding box выделения + отступ 1 м во все стороны
+// Возвращает true и заполняет outBox при наличии выделения, иначе false
+// -----------------------------------------------------------------------------
+static bool GetSelectionBoundsWithMargin (API_Box& outBox)
+{
+	API_SelectionInfo selectionInfo = {};
+	GS::Array<API_Neig> selNeigs;
+	if (ACAPI_Selection_Get (&selectionInfo, &selNeigs, true) != NoError)
+		return false;
+	BMKillHandle ((GSHandle*)&selectionInfo.marquee.coords);
+	if (selectionInfo.typeID == API_SelEmpty || selNeigs.IsEmpty ())
+		return false;
+	bool first = true;
+	double xMin = 0, yMin = 0, xMax = 0, yMax = 0;
+	for (UIndex i = 0; i < selNeigs.GetSize () && i < static_cast<UIndex>(selectionInfo.sel_nElemEdit); i++) {
+		API_Elem_Head elemHead = {};
+		elemHead.guid = selNeigs[i].guid;
+		if (ACAPI_Element_GetHeader (&elemHead) != NoError)
+			continue;
+		API_Box3D bounds = {};
+		if (ACAPI_Element_CalcBounds (&elemHead, &bounds) != NoError)
+			continue;
+		if (first) {
+			xMin = bounds.xMin;
+			yMin = bounds.yMin;
+			xMax = bounds.xMax;
+			yMax = bounds.yMax;
+			first = false;
+		} else {
+			if (bounds.xMin < xMin) xMin = bounds.xMin;
+			if (bounds.yMin < yMin) yMin = bounds.yMin;
+			if (bounds.xMax > xMax) xMax = bounds.xMax;
+			if (bounds.yMax > yMax) yMax = bounds.yMax;
+		}
+	}
+	if (first)
+		return false;
+	const double margin = 1.0;
+	outBox.xMin = xMin - margin;
+	outBox.yMin = yMin - margin;
+	outBox.xMax = xMax + margin;
+	outBox.yMax = yMax + margin;
+	return true;
+}
+
+// -----------------------------------------------------------------------------
 // Собрать слои выделенных элементов
 // -----------------------------------------------------------------------------
 static GS::HashSet<API_AttributeIndex> GetLayersOfSelection ()
@@ -214,13 +296,22 @@ struct ViewLayerState {
 	bool saveLaySet = false;
 };
 
+// Имя временной комбинации слоёв для размещения
+static const char* kTempLayerCombName = "ToLayout_Выделение";
+
 // -----------------------------------------------------------------------------
-// Применить к виду: показывать ТОЛЬКО слои выделенных элементов
+// Создать новую комбинацию слоёв: только слои выделенных элементов видимы
+// Остальные слои — скрыты. Возвращает true при успехе.
 // -----------------------------------------------------------------------------
-static bool ApplyLayersFilterToView (const API_Guid& viewGuid, const GS::HashSet<API_AttributeIndex>& selectedLayers)
+static bool CreateLayerCombForSelection (const GS::HashSet<API_AttributeIndex>& selectedLayers, API_Attr_Head& outAttrHead)
 {
 	if (selectedLayers.IsEmpty ())
 		return false;
+	API_Attr_Head existing = {};
+	existing.typeID = API_LayerCombID;
+	CHCopyC (kTempLayerCombName, existing.name);
+	if (ACAPI_Attribute_Search (&existing) == NoError)
+		ACAPI_Attribute_Delete (existing);
 	GS::Array<API_Attribute> layerCombs;
 	if (ACAPI_Attribute_GetAttributesByType (API_LayerCombID, layerCombs) != NoError || layerCombs.IsEmpty ())
 		return false;
@@ -230,26 +321,108 @@ static bool ApplyLayersFilterToView (const API_Guid& viewGuid, const GS::HashSet
 	GS::HashTable<API_AttributeIndex, API_LayerStat>* newStats = new GS::HashTable<API_AttributeIndex, API_LayerStat> ();
 	for (auto it = defs.layer_statItems->BeginPairs (); it != nullptr; ++it) {
 		API_LayerStat stat = *it->value;
-		if (selectedLayers.Contains (*it->key))
+		const API_AttributeIndex layerIdx = *it->key;
+		if (layerIdx == APIApplicationLayerAttributeIndex) {
 			stat.lFlags &= static_cast<short>(~APILay_Hidden);
-		else
+		} else if (selectedLayers.Contains (layerIdx)) {
+			stat.lFlags &= static_cast<short>(~APILay_Hidden);
+		} else {
 			stat.lFlags |= APILay_Hidden;
-		newStats->Add (*it->key, stat);
+		}
+		newStats->Add (layerIdx, stat);
 	}
 	ACAPI_DisposeAttrDefsHdls (&defs);
+	defs.layer_statItems = newStats;
+	API_Attribute attrib = {};
+	attrib.header.typeID = API_LayerCombID;
+	strcpy (attrib.layerComb.head.name, kTempLayerCombName);
+	attrib.layerComb.lNumb = static_cast<Int32> (newStats->GetSize ());
+	GSErrCode err = ACAPI_Attribute_Create (&attrib, &defs);
+	ACAPI_DisposeAttrDefsHdls (&defs);
+	if (err != NoError)
+		return false;
+	outAttrHead = attrib.header;
+	return true;
+}
+
+// -----------------------------------------------------------------------------
+// Создать новый вид во вкладке «Виды»: клон текущего вида + фильтр слоёв
+// customViewName — имя вида в Карте Видов (пустое = не менять)
+// zoomBox — опционально: рамка обрезки вида (bounding box выделения + отступ)
+// Возвращает guid созданного вида или APINULLGuid при ошибке
+// -----------------------------------------------------------------------------
+static API_Guid CloneViewToViewMapWithLayerFilter (const GS::HashSet<API_AttributeIndex>& selectedLayers, Int32 drawingScale, const GS::UniString& customViewName, const API_Box* zoomBox = nullptr)
+{
+	API_Guid sourceGuid = {};
+	if (!GetProjectMapItemForCurrentView (sourceGuid))
+		return APINULLGuid;
+	API_NavigatorSet viewSet = {};
+	viewSet.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorSet (&viewSet) != NoError)
+		return APINULLGuid;
+	API_NavigatorItem rootItem = {};
+	rootItem.guid = viewSet.rootGuid;
+	rootItem.mapId = API_PublicViewMap;
+	GS::Array<API_NavigatorItem> rootChildren;
+	if (ACAPI_Navigator_GetNavigatorChildrenItems (&rootItem, &rootChildren) != NoError || rootChildren.IsEmpty ())
+		return APINULLGuid;
+	API_Guid parentGuid = rootChildren[0].guid;
+	API_Guid clonedGuid = {};
+	if (ACAPI_Navigator_CloneProjectMapItemToViewMap (&sourceGuid, &parentGuid, &clonedGuid) != NoError || clonedGuid == APINULLGuid)
+		return APINULLGuid;
+	if (selectedLayers.IsEmpty ())
+		return clonedGuid;
+	API_Attr_Head tempLayerCombHead = {};
+	if (!CreateLayerCombForSelection (selectedLayers, tempLayerCombHead))
+		return clonedGuid;
+	API_NavigatorItem clonedNavItem = {};
+	clonedNavItem.guid = clonedGuid;
+	clonedNavItem.mapId = API_PublicViewMap;
+	API_NavigatorView navView = {};
+	if (ACAPI_Navigator_GetNavigatorView (&clonedNavItem, &navView) != NoError) {
+		if (navView.layerStats != nullptr) { delete navView.layerStats; navView.layerStats = nullptr; }
+		return clonedGuid;
+	}
+	if (navView.layerStats != nullptr) {
+		delete navView.layerStats;
+		navView.layerStats = nullptr;
+	}
+	CHCopyC (kTempLayerCombName, navView.layerCombination);
+	navView.saveLaySet = true;
+	navView.drawingScale = drawingScale;
+	navView.saveDScale = true;
+	if (zoomBox != nullptr) {
+		navView.zoom = *zoomBox;
+		navView.saveZoom = true;
+	}
+	ACAPI_Navigator_ChangeNavigatorView (&clonedNavItem, &navView);
+	if (!customViewName.IsEmpty ()) {
+		if (ACAPI_Navigator_GetNavigatorItem (&clonedGuid, &clonedNavItem) == NoError) {
+			clonedNavItem.customName = true;
+			GS::ucscpy (clonedNavItem.uName, customViewName.ToUStr ());
+			ACAPI_Navigator_ChangeNavigatorItem (&clonedNavItem);
+		}
+	}
+	return clonedGuid;
+}
+
+// -----------------------------------------------------------------------------
+// Применить к виду комбинацию слоёв по имени
+// -----------------------------------------------------------------------------
+static bool ApplyLayerCombToView (const API_Guid& viewGuid, const char* layerCombName)
+{
 	API_NavigatorItem navItem = {};
 	navItem.guid = viewGuid;
 	API_NavigatorView navView = {};
-	if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) != NoError) {
-		delete newStats;
+	if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) != NoError)
 		return false;
+	if (navView.layerStats != nullptr) {
+		delete navView.layerStats;
+		navView.layerStats = nullptr;
 	}
-	navView.layerStats = newStats;
-	navView.layerCombination[0] = '\0';
+	CHCopyC (layerCombName, navView.layerCombination);
 	navView.saveLaySet = true;
-	GSErrCode err = ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-	delete newStats;
-	return (err == NoError);
+	return (ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView) == NoError);
 }
 
 static void RestoreViewLayerState (ViewLayerState& state)
@@ -270,53 +443,124 @@ static void RestoreViewLayerState (ViewLayerState& state)
 }
 
 // -----------------------------------------------------------------------------
+// Вычислить позицию вида на макете по точке привязки
+// layoutInfo — параметры макета (sizeX, sizeY, margins в мм)
+// drawing.pos в layout БД использует внутренние единицы (метры), конвертируем мм → м
+// -----------------------------------------------------------------------------
+static void GetDrawingPositionForAnchor (const API_LayoutInfo& layoutInfo, PlaceParams::Anchor anchor, API_AnchorID& outAnchor, API_Coord& outPos)
+{
+	const double MM_TO_M = 1.0 / 1000.0;
+	const double left = layoutInfo.leftMargin * MM_TO_M;
+	const double right = (layoutInfo.sizeX - layoutInfo.rightMargin) * MM_TO_M;
+	const double top = (layoutInfo.sizeY - layoutInfo.topMargin) * MM_TO_M;
+	const double bottom = layoutInfo.bottomMargin * MM_TO_M;
+	const double cx = left + (right - left) * 0.5;
+	const double cy = bottom + (top - bottom) * 0.5;
+	switch (anchor) {
+		case PlaceParams::Anchor::LeftBottom:
+			outAnchor = APIAnc_LB;
+			outPos.x = left;
+			outPos.y = bottom;
+			break;
+		case PlaceParams::Anchor::LeftTop:
+			outAnchor = APIAnc_LT;
+			outPos.x = left;
+			outPos.y = top;
+			break;
+		case PlaceParams::Anchor::RightTop:
+			outAnchor = APIAnc_RT;
+			outPos.x = right;
+			outPos.y = top;
+			break;
+		case PlaceParams::Anchor::RightBottom:
+			outAnchor = APIAnc_RB;
+			outPos.x = right;
+			outPos.y = bottom;
+			break;
+		case PlaceParams::Anchor::Middle:
+			outAnchor = APIAnc_MM;
+			outPos.x = cx;
+			outPos.y = cy;
+			break;
+		default:
+			outAnchor = APIAnc_LB;
+			outPos.x = left;
+			outPos.y = bottom;
+			break;
+	}
+}
+
+// -----------------------------------------------------------------------------
 // Размещение связанного Drawing (вид → макет) по выбранному макету
 // -----------------------------------------------------------------------------
-static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const GS::UniString& drawingName)
+static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const PlaceParams& params)
 {
-	API_Guid viewGuid = {};
-	if (!GetCurrentViewNavigatorItem (viewGuid)) {
-		ACAPI_WriteReport ("Otkroite plan, razrez ili fasad pered razmeshcheniem.", true);
+	API_Guid dummyGuid = {};
+	if (!GetCurrentViewNavigatorItem (dummyGuid)) {
+		ACAPI_WriteReport ("Откройте план, разрез или фасад перед размещением.", true);
 		return false;
 	}
+	const GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
+	double currentScale = GetCurrentDrawingScale ();
 	GS::HashSet<API_AttributeIndex> selectedLayers = GetLayersOfSelection ();
-	ViewLayerState savedState = {};
-	savedState.viewGuid = viewGuid;
-	bool layersFilterApplied = false;
+	API_Box zoomBox = {};
+	const bool hasZoomBox = GetSelectionBoundsWithMargin (zoomBox);
+	API_Guid viewGuidForDrawing = APINULLGuid;
 	if (!selectedLayers.IsEmpty ()) {
+		viewGuidForDrawing = CloneViewToViewMapWithLayerFilter (
+			selectedLayers, static_cast<Int32> (currentScale), drawingName,
+			hasZoomBox ? &zoomBox : nullptr);
+	}
+	if (viewGuidForDrawing == APINULLGuid) {
+		GetCurrentViewNavigatorItem (viewGuidForDrawing);
+		if (viewGuidForDrawing == APINULLGuid) {
+			ACAPI_WriteReport ("Не удалось получить вид для размещения.", true);
+			return false;
+		}
 		API_NavigatorItem navItem = {};
-		navItem.guid = viewGuid;
+		navItem.guid = viewGuidForDrawing;
 		API_NavigatorView navView = {};
 		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-			CHCopyC (navView.layerCombination, savedState.layerCombination);
-			savedState.saveLaySet = navView.saveLaySet;
-			if (navView.layerStats != nullptr)
-				savedState.layerStatsCopy = new GS::HashTable<API_AttributeIndex, API_LayerStat> (*navView.layerStats);
-			layersFilterApplied = ApplyLayersFilterToView (viewGuid, selectedLayers);
+			navView.drawingScale = static_cast<Int32> (currentScale);
+			navView.saveDScale = true;
+			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
+			if (navView.layerStats != nullptr) {
+				delete navView.layerStats;
+				navView.layerStats = nullptr;
+			}
 		}
 	}
 	API_DatabaseInfo currentDb = {};
-	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError) {
-		if (layersFilterApplied)
-			RestoreViewLayerState (savedState);
+	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError)
 		return false;
+	API_LayoutInfo layoutInfo = {};
+	BNZeroMemory (&layoutInfo, sizeof (layoutInfo));
+	API_DatabaseUnId layoutDbId = chosenLayoutId;
+	if (ACAPI_Navigator_GetLayoutSets (&layoutInfo, &layoutDbId) != NoError) {
+		if (layoutInfo.customData != nullptr) {
+			delete layoutInfo.customData;
+			layoutInfo.customData = nullptr;
+		}
 	}
+	API_AnchorID anchorId = APIAnc_LB;
+	API_Coord drawPos = { 0.0, 0.0 };
+	GetDrawingPositionForAnchor (layoutInfo, params.anchorPosition, anchorId, drawPos);
+	if (layoutInfo.customData != nullptr) {
+		delete layoutInfo.customData;
+		layoutInfo.customData = nullptr;
+	}
+
 	API_Element element = {};
 	element.header.type = API_DrawingID;
 	GSErrCode err = ACAPI_Element_GetDefaults (&element, nullptr);
-	if (err != NoError) {
-		if (layersFilterApplied)
-			RestoreViewLayerState (savedState);
+	if (err != NoError)
 		return false;
-	}
-	element.drawing.drawingGuid = viewGuid;
+	element.drawing.drawingGuid = viewGuidForDrawing;
 	element.drawing.nameType = APIName_CustomName;
-	GS::UniString name = drawingName.IsEmpty () ? GS::UniString ("Vid v maket") : drawingName;
-	CHCopyC (name.ToCStr (CC_UTF8).Get (), element.drawing.name);
+	CHCopyC (drawingName.ToCStr (CC_UTF8).Get (), element.drawing.name);
 	element.drawing.ratio = 1.0;
-	element.drawing.anchorPoint = APIAnc_LB;
-	element.drawing.pos.x = 0.0;
-	element.drawing.pos.y = 0.0;
+	element.drawing.anchorPoint = anchorId;
+	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
 	err = ACAPI_CallUndoableCommand ("Place view on layout", [&] () -> GSErrCode {
 		API_DatabaseInfo layoutDb = {};
@@ -330,10 +574,8 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		ACAPI_Database_ChangeCurrentDatabase (&currentDb);
 		return createErr;
 	});
-	if (layersFilterApplied)
-		RestoreViewLayerState (savedState);
 	if (err != NoError) {
-		ACAPI_WriteReport ("LayoutHelper: ne udalos sozdat Drawing na makete", true);
+		ACAPI_WriteReport ("LayoutHelper: не удалось создать Drawing на макете", true);
 		return false;
 	}
 	ACAPI_WriteReport ("Vid razmeshchen v makete.", false);
@@ -368,7 +610,7 @@ bool PlaceSelectionOnLayoutWithParams (const PlaceParams& params)
 			ACAPI_WriteReport ("LayoutHelper: GetLayoutSets (master) failed", true);
 			return false;
 		}
-		GS::UniString layoutName = params.layoutName.IsEmpty () ? GS::UniString ("Noviy maket") : params.layoutName;
+		GS::UniString layoutName = params.layoutName.IsEmpty () ? GS::UniString ("Новый макет") : params.layoutName;
 		BNZeroMemory (layoutInfo.layoutName, sizeof (layoutInfo.layoutName));
 		GS::snuprintf (layoutInfo.layoutName, API_UniLongNameLen, "%s", layoutName.ToCStr (CC_UTF8).Get ());
 		if (layoutInfo.customData != nullptr) {
@@ -418,7 +660,7 @@ bool PlaceSelectionOnLayoutWithParams (const PlaceParams& params)
 		targetLayoutId = layouts[params.layoutIndex].databaseUnId;
 	}
 
-	return DoPlaceLinkedDrawingOnLayout (targetLayoutId, params.drawingName);
+	return DoPlaceLinkedDrawingOnLayout (targetLayoutId, params);
 }
 
 // -----------------------------------------------------------------------------

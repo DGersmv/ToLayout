@@ -406,6 +406,14 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				p.drawingName = GetStringFromJavaScriptVariable(item);
 			if (tbl.Get("layoutName", &item))
 				p.layoutName = GetStringFromJavaScriptVariable(item);
+			if (tbl.Get("anchorPosition", &item)) {
+				GS::UniString anchorStr = GetStringFromJavaScriptVariable(item);
+				if (anchorStr == "LT") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftTop;
+				else if (anchorStr == "RT") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightTop;
+				else if (anchorStr == "RB") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightBottom;
+				else if (anchorStr == "MM") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::Middle;
+				else p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftBottom;
+			}
 		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			p.layoutIndex = static_cast<Int32>(v->GetInteger());
 		}
