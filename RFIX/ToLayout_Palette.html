@@ -107,6 +107,22 @@
     .radio-row input {
       margin-right: 6px;
     }
+    .anchor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      max-width: 200px;
+    }
+    .anchor-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .anchor-cell input { margin: 0; }
+    .anchor-spacer { visibility: hidden; }
   </style>
 </head>
 <body>
@@ -130,12 +146,24 @@
 
   <div class="section">
     <div class="section-title">Имя макета</div>
-    <input type="text" class="text-input" id="layout-name" placeholder="Noviy maket (ili latinica)" />
+    <input type="text" class="text-input" id="layout-name" placeholder="Новый макет" />
   </div>
 
   <div class="section">
     <div class="section-title">Имя вида</div>
-    <input type="text" class="text-input" id="drawing-name" placeholder="Vid v maket (ili latinica)" />
+    <input type="text" class="text-input" id="drawing-name" placeholder="Новый вид" />
+  </div>
+
+  <div class="section">
+    <div class="section-title">Расположение на макете</div>
+    <div class="anchor-grid">
+      <label class="anchor-cell"><input type="radio" name="anchor" value="LT" /><span>Сверху слева</span></label>
+      <label class="anchor-cell anchor-center"><input type="radio" name="anchor" value="MM" /><span>Центр</span></label>
+      <label class="anchor-cell"><input type="radio" name="anchor" value="RT" /><span>Сверху справа</span></label>
+      <label class="anchor-cell"><input type="radio" name="anchor" value="LB" checked /><span>Снизу слева</span></label>
+      <label class="anchor-cell anchor-spacer"></label>
+      <label class="anchor-cell"><input type="radio" name="anchor" value="RB" /><span>Снизу справа</span></label>
+    </div>
   </div>
 
   <button class="button-ok" id="btn-ok">OK</button>
@@ -238,17 +266,27 @@ function onOkClick() {
     return;
   }
 
-  var layoutName = (layoutNameEl && layoutNameEl.value.trim()) ? layoutNameEl.value.trim() : 'Noviy maket';
-  var drawingName = (drawingNameEl && drawingNameEl.value.trim()) ? drawingNameEl.value.trim() : 'Vid v maket';
+  var layoutName = (layoutNameEl && layoutNameEl.value.trim()) ? layoutNameEl.value.trim() : 'Новый макет';
+  var drawingName = (drawingNameEl && drawingNameEl.value.trim()) ? drawingNameEl.value.trim() : 'Новый вид';
 
   setInfo('Размещение…');
   document.getElementById('btn-ok').disabled = true;
+
+  var anchorRadios = document.querySelectorAll('input[name="anchor"]');
+  var anchorValue = 'LB';
+  for (var i = 0; i < anchorRadios.length; i++) {
+    if (anchorRadios[i].checked) {
+      anchorValue = anchorRadios[i].value;
+      break;
+    }
+  }
 
   var params = {
     masterLayoutIndex: masterIndex,
     layoutIndex: 0,
     layoutName: layoutName,
-    drawingName: drawingName
+    drawingName: drawingName,
+    anchorPosition: anchorValue
   };
 
   A.PlaceOnLayout(params).then(function(success) {
