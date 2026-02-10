@@ -469,13 +469,41 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				p.drawingName = GetStringFromJavaScriptVariable(item);
 			if (tbl.Get("layoutName", &item))
 				p.layoutName = GetStringFromJavaScriptVariable(item);
-			if (tbl.Get("anchorPosition", &item)) {
+
+			// Точка привязки вида на макете (радиокнопки LB/LT/RT/RB/MM)
+			// Читаем максимально устойчиво: сначала строку, при неудаче — возможное целочисленное значение.
+			if (!tbl.Get("anchorPosition", &item)) {
+				// fallback на ключ "anchor" на случай изменений в HTML
+				tbl.Get("anchor", &item);
+			}
+			if (item != nullptr) {
 				GS::UniString anchorStr = GetStringFromJavaScriptVariable(item);
-				if (anchorStr == "LT") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftTop;
-				else if (anchorStr == "RT") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightTop;
-				else if (anchorStr == "RB") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightBottom;
-				else if (anchorStr == "MM") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::Middle;
-				else p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftBottom;
+				anchorStr.Trim ();
+				if (anchorStr == "LT") {
+					p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftTop;
+				} else if (anchorStr == "RT") {
+					p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightTop;
+				} else if (anchorStr == "RB") {
+					p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightBottom;
+				} else if (anchorStr == "MM") {
+					p.anchorPosition = LayoutHelper::PlaceParams::Anchor::Middle;
+				} else if (anchorStr == "LB") {
+					p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftBottom;
+				} else if (anchorStr.IsEmpty ()) {
+					// Возможен вариант, когда значение приходит как число (0..4)
+					if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value> (item)) {
+						if (vv->GetType () == JS::Value::INTEGER) {
+							switch (vv->GetInteger ()) {
+								case 1: p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftTop;    break;
+								case 2: p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightTop;   break;
+								case 3: p.anchorPosition = LayoutHelper::PlaceParams::Anchor::RightBottom;break;
+								case 4: p.anchorPosition = LayoutHelper::PlaceParams::Anchor::Middle;     break;
+								default: p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftBottom;break;
+							}
+						}
+					}
+				}
+				// Если anchorStr не распознан и не число — остаётся значение по умолчанию (LeftBottom)
 			}
 			if (tbl.Get("fitScaleToLayout", &item)) {
 				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))

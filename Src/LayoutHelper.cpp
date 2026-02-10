@@ -204,9 +204,6 @@ static bool GetActiveFloorInd (short& outFloorInd)
 	if (storyInfo.actStory >= first && storyInfo.actStory <= last) {
 		outFloorInd = storyInfo.actStory;
 		BMKillHandle ((GSHandle*) &storyInfo.data);
-		char buf[128];
-		std::snprintf (buf, sizeof buf, "[ToLayout] GetActiveFloorInd (actStory): floor=%d", (int)outFloorInd);
-		ACAPI_WriteReport (buf, false);
 		return true;
 	}
 	
@@ -244,8 +241,6 @@ static void CollectStoryItems (const API_NavigatorItem& node, GS::Array<API_Navi
 static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyItems,
 	short targetFloorInd, API_Guid& outGuid)
 {
-	char buf[256];
-
 	// ---------- Стратегия C первой: Project Map — единственный надёжный источник этажей (1-й, 2-й, 3-й) ----------
 	// Не зависим от переданного storyItems (из View Map может быть "Новый вид"/"1-й этаж", из Project Map — иногда 1 элемент).
 	// View Map даёт "Новый вид"/"1-й этаж" и т.п., без 2-го этажа; здесь берём реальный список этажей по порядку.
@@ -271,12 +266,6 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 				// Выбираем этаж по floorNum, а не по индексу в дереве — порядок узлов может не совпадать с 0,1,2
 				for (UIndex k = 0; k < treeStories.GetSize (); k++) {
 					if (treeStories[k].floorNum == targetFloorInd) {
-						GS::UniString navName (treeStories[k].uName);
-						std::snprintf (buf, sizeof buf,
-							"[ToLayout] StrategyC floorNum: floor=%d nav='%s' treeSize=%u",
-							(int)targetFloorInd, navName.ToCStr (CC_UTF8).Get (),
-							(unsigned)treeStories.GetSize ());
-						ACAPI_WriteReport (buf, false);
 						outGuid = treeStories[k].guid;
 						return true;
 					}
@@ -293,10 +282,6 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 						for (UIndex k = 0; k < treeStories.GetSize (); k++) {
 							GS::UniString itemName (treeStories[k].uName);
 							if (itemName == targetName || itemName.EndsWith (targetName)) {
-								std::snprintf (buf, sizeof buf,
-									"[ToLayout] StrategyC byName: floor=%d name='%s'",
-									(int)targetFloorInd, targetName.ToCStr (CC_UTF8).Get ());
-								ACAPI_WriteReport (buf, false);
 								outGuid = treeStories[k].guid;
 								return true;
 							}
@@ -318,10 +303,6 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 				}
 				short treeOff = targetFloorInd - firstStory;
 				if (treeOff >= 0 && static_cast<UIndex> (treeOff) < treeStories.GetSize ()) {
-					std::snprintf (buf, sizeof buf,
-						"[ToLayout] StrategyC tree index: floor=%d off=%d treeSize=%u",
-						(int)targetFloorInd, (int)treeOff, (unsigned)treeStories.GetSize ());
-					ACAPI_WriteReport (buf, false);
 					outGuid = treeStories[static_cast<UIndex> (treeOff)].guid;
 					return true;
 				}
@@ -350,11 +331,6 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 				if (ACAPI_Navigator_GetNavigatorItem (&storyItems[i].guid, &fi) == NoError) {
 					GS::UniString navName (fi.uName);
 					if (navName == targetStoryName) {
-						std::snprintf (buf, sizeof buf,
-							"[ToLayout] StrategyA exact: floor=%d name='%s'",
-							(int)targetFloorInd,
-							targetStoryName.ToCStr (CC_UTF8).Get ());
-						ACAPI_WriteReport (buf, false);
 						outGuid = storyItems[i].guid;
 						return true;
 					}
@@ -365,12 +341,6 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 				if (ACAPI_Navigator_GetNavigatorItem (&storyItems[i].guid, &fi) == NoError) {
 					GS::UniString navName (fi.uName);
 					if (navName.Contains (targetStoryName)) {
-						std::snprintf (buf, sizeof buf,
-							"[ToLayout] StrategyA contains: floor=%d name='%s' nav='%s'",
-							(int)targetFloorInd,
-							targetStoryName.ToCStr (CC_UTF8).Get (),
-							navName.ToCStr (CC_UTF8).Get ());
-						ACAPI_WriteReport (buf, false);
 						outGuid = storyItems[i].guid;
 						return true;
 					}
@@ -384,30 +354,8 @@ static bool FindStoryNavItemForFloor (const GS::Array<API_NavigatorItem>& storyI
 	// ---------- Стратегия B: по floorNum (актуально только если storyItems из Project Map) ----------
 	for (UIndex i = 0; i < storyItems.GetSize (); i++) {
 		if (storyItems[i].floorNum == targetFloorInd) {
-			GS::UniString navName (storyItems[i].uName);
-			std::snprintf (buf, sizeof buf,
-				"[ToLayout] StrategyB floorNum: floor=%d nav='%s'",
-				(int)targetFloorInd, navName.ToCStr (CC_UTF8).Get ());
-			ACAPI_WriteReport (buf, false);
 			outGuid = storyItems[i].guid;
 			return true;
-		}
-	}
-
-	// ---------- Ничего не подошло — лог для диагностики ----------
-	std::snprintf (buf, sizeof buf,
-		"[ToLayout] FAIL: targetFloor=%d items=%u haveStoryInfo=%d",
-		(int)targetFloorInd, (unsigned)storyItems.GetSize (), (int)haveStoryInfo);
-	ACAPI_WriteReport (buf, false);
-
-	for (UIndex i = 0; i < storyItems.GetSize (); i++) {
-		API_NavigatorItem fi = {};
-		if (ACAPI_Navigator_GetNavigatorItem (&storyItems[i].guid, &fi) == NoError) {
-			GS::UniString navName (fi.uName);
-			std::snprintf (buf, sizeof buf,
-				"[ToLayout]   item[%u] uName='%s'",
-				(unsigned)i, navName.ToCStr (CC_UTF8).Get ());
-			ACAPI_WriteReport (buf, false);
 		}
 	}
 	return false;
@@ -424,14 +372,8 @@ static bool FindStoryForSelection (const GS::Array<API_NavigatorItem>& items,
 		return false;
 	short targetFloor = 0;
 	// Только активный этаж из API (actStory), не из выделения
-	if (!GetActiveFloorInd (targetFloor)) {
-		ACAPI_WriteReport ("[ToLayout] GetActiveFloorInd failed (not floor plan or no actStory)", false);
+	if (!GetActiveFloorInd (targetFloor))
 		return false;
-	}
-	char b[128];
-	std::snprintf (b, sizeof b, "[ToLayout] active floor floorInd = %d, items = %u",
-		(int)targetFloor, (unsigned)items.GetSize ());
-	ACAPI_WriteReport (b, false);
 	return FindStoryNavItemForFloor (items, targetFloor, outGuid);
 }
 
@@ -744,16 +686,16 @@ static void RestoreViewLayerState (ViewLayerState& state)
 }
 
 // -----------------------------------------------------------------------------
-// Вычислить позицию вида на макете по точке привязки
-// layoutInfo — параметры макета (sizeX, sizeY, margins в мм)
-// drawing.pos в layout БД использует внутренние единицы (метры), конвертируем мм → м
+// Вычислить позицию вида на макете по точке привязки (как было до экспериментов с pos).
+// layoutInfo — параметры макета (sizeX, sizeY, margins в мм); pos в метрах.
+// outAnchor и outPos — куда на макете привязать выбранный угол/центр чертежа.
 // -----------------------------------------------------------------------------
 static void GetDrawingPositionForAnchor (const API_LayoutInfo& layoutInfo, PlaceParams::Anchor anchor, API_AnchorID& outAnchor, API_Coord& outPos)
 {
 	const double MM_TO_M = 1.0 / 1000.0;
-	const double left = layoutInfo.leftMargin * MM_TO_M;
-	const double right = (layoutInfo.sizeX - layoutInfo.rightMargin) * MM_TO_M;
-	const double top = (layoutInfo.sizeY - layoutInfo.topMargin) * MM_TO_M;
+	const double left   = layoutInfo.leftMargin * MM_TO_M;
+	const double right  = (layoutInfo.sizeX - layoutInfo.rightMargin) * MM_TO_M;
+	const double top    = (layoutInfo.sizeY - layoutInfo.topMargin) * MM_TO_M;
 	const double bottom = layoutInfo.bottomMargin * MM_TO_M;
 	const double cx = left + (right - left) * 0.5;
 	const double cy = bottom + (top - bottom) * 0.5;
@@ -878,14 +820,63 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			}
 		}
 	}
+	// Если extent нулевой (например при RT/RB после смены вида) — берём zoom из размещаемого вида
+	double extentW = zoomBox.xMax - zoomBox.xMin;
+	double extentH = zoomBox.yMax - zoomBox.yMin;
+	if (extentW < 1e-6 || extentH < 1e-6) {
+		API_NavigatorItem navItem = {};
+		navItem.guid = viewGuidForDrawing;
+		navItem.mapId = API_PublicViewMap;
+		API_NavigatorView navView = {};
+		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
+			zoomBox = navView.zoom;
+			extentW = zoomBox.xMax - zoomBox.xMin;
+			extentH = zoomBox.yMax - zoomBox.yMin;
+			if (navView.layerStats != nullptr) {
+				delete navView.layerStats;
+				navView.layerStats = nullptr;
+			}
+		}
+	}
+	double sizeMmW = (currentScale > 1e-6) ? (extentW * 1000.0 / currentScale) : 0.0;
+	double sizeMmH = (currentScale > 1e-6) ? (extentH * 1000.0 / currentScale) : 0.0;
+	const double sizeW_m = sizeMmW * 0.001;
+	const double sizeH_m = sizeMmH * 0.001;
+
 	API_AnchorID anchorId = APIAnc_LB;
 	API_Coord drawPos = { 0.0, 0.0 };
 	GetDrawingPositionForAnchor (layoutInfo, params.anchorPosition, anchorId, drawPos);
+	// Корректируем pos с учётом размера чертежа: после вычитания pos = левый нижний угол рамки
+	// LB — без изменений; LT — вычесть высоту; MM — половину размера; RT — ширину и высоту; RB — ширину
+	// Для LT/MM/RT/RB после корректировки передаём якорь LB (pos = левый нижний угол)
+	switch (params.anchorPosition) {
+		case PlaceParams::Anchor::LeftTop:
+			drawPos.y -= sizeH_m;
+			anchorId = APIAnc_LB;
+			break;
+		case PlaceParams::Anchor::Middle:
+			drawPos.x -= sizeW_m * 0.5;
+			drawPos.y -= sizeH_m * 0.5;
+			anchorId = APIAnc_LB;
+			break;
+		case PlaceParams::Anchor::RightTop:
+			drawPos.x -= sizeW_m;
+			drawPos.y -= sizeH_m;
+			anchorId = APIAnc_LB;
+			break;
+		case PlaceParams::Anchor::RightBottom:
+			drawPos.x -= sizeW_m;
+			anchorId = APIAnc_LB;
+			break;
+		default:
+			break;
+	}
 	if (layoutInfo.customData != nullptr) {
 		delete layoutInfo.customData;
 		layoutInfo.customData = nullptr;
 	}
 
+	// Система координат макета: начало в левом нижнем углу листа, pos в метрах
 	API_Element element = {};
 	element.header.type = API_DrawingID;
 	GSErrCode err = ACAPI_Element_GetDefaults (&element, nullptr);
@@ -896,9 +887,11 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	CHCopyC (drawingName.ToCStr (CC_UTF8).Get (), element.drawing.name);
 	element.drawing.ratio = 1.0;
 	element.drawing.anchorPoint = anchorId;
-	element.drawing.useOwnOrigoAsAnchor = false;  // иначе игнорируется anchorPoint и вид привязывается по своему origin (слева снизу)
+	element.drawing.useOwnOrigoAsAnchor = false;
 	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
+
+
 	err = ACAPI_CallUndoableCommand ("Place view on layout", [&] () -> GSErrCode {
 		API_DatabaseInfo layoutDb = {};
 		layoutDb.databaseUnId = chosenLayoutId;
@@ -908,6 +901,27 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			return e;
 		API_ElementMemo memo = {};
 		GSErrCode createErr = ACAPI_Element_Create (&element, &memo);
+		if (createErr != NoError) {
+			ACAPI_Database_ChangeCurrentDatabase (&currentDb);
+			return createErr;
+		}
+		// Сразу после создания выставляем pos и якорь по полям макета
+		API_Element getElem = {};
+		getElem.header.guid = element.header.guid;
+		getElem.header.type = API_ElemType (API_DrawingID);
+		if (ACAPI_Element_Get (&getElem, 0) == NoError) {
+			getElem.drawing.pos = drawPos;
+			getElem.drawing.anchorPoint = anchorId;
+			getElem.drawing.useOwnOrigoAsAnchor = false;
+			API_Element maskElem = {};
+			BNZeroMemory (&maskElem, sizeof (maskElem));
+			maskElem.header.type = API_ElemType (API_DrawingID);
+			maskElem.drawing.pos.x = 1.0;
+			maskElem.drawing.pos.y = 1.0;
+			maskElem.drawing.anchorPoint = APIAnc_LB;
+			maskElem.drawing.useOwnOrigoAsAnchor = true;
+			ACAPI_Element_Change (&getElem, &maskElem, nullptr, 0, false);
+		}
 		ACAPI_Database_ChangeCurrentDatabase (&currentDb);
 		return createErr;
 	});
