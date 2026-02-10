@@ -356,6 +356,7 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		}));
 
 	// --- Layout API (для палитры To Layout) ---
+	// Простой список макетов (используется в старом UI и для совместимости)
 	jsACAPI->AddItem(new JS::Function("GetLayouts", [](GS::Ref<JS::Base>) {
 		const GS::Array<LayoutHelper::LayoutItem> layouts = LayoutHelper::GetLayoutList();
 		GS::Ref<JS::Array> jsArr = new JS::Array();
@@ -366,6 +367,68 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 			jsArr->AddItem(obj);
 		}
 		return jsArr;
+		}));
+
+	// Группированный список макетов: имитируем папки Навигатора
+	// Формат: [{ groupName: string, layouts: [{ index: int, name: string }, ...] }, ...]
+	jsACAPI->AddItem(new JS::Function("GetLayoutsTree", [](GS::Ref<JS::Base>) {
+		const GS::Array<LayoutHelper::LayoutItem> layouts = LayoutHelper::GetLayoutList();
+
+		// Карта: имя группы -> индексы макетов в исходном массиве
+		GS::HashTable<GS::UniString, GS::Array<UIndex>> groups;
+		GS::Array<GS::UniString> groupOrder;
+
+		for (UIndex i = 0; i < layouts.GetSize(); ++i) {
+			const GS::UniString& fullName = layouts[i].name;
+
+			GS::UniString groupName;
+
+			// Пробуем разделить по '/' как по разделителю папок
+			USize slashPos = fullName.FindFirst (GS::UniChar ('/'));
+			if (slashPos != MaxUSize) {
+				groupName = fullName.GetSubstring (0, slashPos);
+			} else {
+				// Если нет разделителя — считаем, что макет без папки
+				groupName = GS::UniString ("Без папки");
+			}
+
+			if (!groups.ContainsKey (groupName)) {
+				groups.Add (groupName, GS::Array<UIndex> ());
+				groupOrder.Push (groupName);
+			}
+
+			GS::Array<UIndex>* idxArray = groups.GetPtr (groupName);
+			if (idxArray != nullptr) {
+				idxArray->Push (i);
+			}
+		}
+
+		GS::Ref<JS::Array> jsGroups = new JS::Array();
+
+		for (UIndex gi = 0; gi < groupOrder.GetSize(); ++gi) {
+			const GS::UniString& grpName = groupOrder[gi];
+			const GS::Array<UIndex>& idxArray = groups[grpName];
+
+			GS::Ref<JS::Object> grpObj = new JS::Object();
+			grpObj->AddItem("groupName", new JS::Value(grpName));
+
+			GS::Ref<JS::Array> jsLayouts = new JS::Array();
+			for (UIndex k = 0; k < idxArray.GetSize(); ++k) {
+				UIndex idx = idxArray[k];
+				if (idx >= layouts.GetSize())
+					continue;
+
+				GS::Ref<JS::Object> lo = new JS::Object();
+				lo->AddItem("index", new JS::Value(static_cast<Int32>(idx)));
+				lo->AddItem("name", new JS::Value(layouts[idx].name));
+				jsLayouts->AddItem(lo);
+			}
+
+			grpObj->AddItem("layouts", jsLayouts);
+			jsGroups->AddItem(grpObj);
+		}
+
+		return jsGroups;
 		}));
 
 	jsACAPI->AddItem(new JS::Function("GetMasterLayouts", [](GS::Ref<JS::Base>) {

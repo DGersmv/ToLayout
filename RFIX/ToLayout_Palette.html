@@ -123,6 +123,36 @@
     }
     .anchor-cell input { margin: 0; }
     .anchor-spacer { visibility: hidden; }
+    .mode-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      margin: 3px 0;
+    }
+    .layout-table {
+      max-height: 160px;
+      overflow-y: auto;
+      border: 1px solid #c8c4c0;
+      background: #fff;
+      padding: 4px;
+    }
+    .layout-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .layout-table th, .layout-table td {
+      padding: 4px 6px;
+      border: 1px solid #c8c4c0;
+    }
+    .layout-group-row td {
+      background: #e6e2dc;
+      font-weight: 600;
+    }
+    .layout-row:hover td {
+      background: #f3f1ee;
+    }
   </style>
 </head>
 <body>
@@ -138,15 +168,32 @@
   </div>
 
   <div class="section">
+    <div class="section-title">Режим размещения</div>
+    <div class="mode-row">
+      <label><input type="radio" name="place-mode" value="new" checked /> Новый макет по шаблону</label>
+    </div>
+    <div class="mode-row">
+      <label><input type="radio" name="place-mode" value="existing" /> Существующий макет</label>
+    </div>
+  </div>
+
+  <div class="section" id="mode-new-block">
     <div class="section-title">Шаблон макета (Основные)</div>
     <select class="layout-select" id="master-select">
       <option value="-1">Загрузка…</option>
     </select>
   </div>
 
-  <div class="section">
+  <div class="section" id="mode-new-layout-name">
     <div class="section-title">Имя макета</div>
     <input type="text" class="text-input" id="layout-name" placeholder="Новый макет" />
+  </div>
+
+  <div class="section" id="mode-existing-block" style="display:none;">
+    <div class="section-title">Существующий макет</div>
+    <div class="layout-table" id="layout-table-container">
+      <div class="empty-msg">Загрузка…</div>
+    </div>
   </div>
 
   <div class="section">
@@ -257,6 +304,92 @@ function updateMasterSelect() {
   });
 }
 
+function updateLayoutTable() {
+  var A = window.ACAPI;
+  var container = document.getElementById('layout-table-container');
+  if (!container)
+    return;
+
+  if (!A || (typeof A.GetLayoutsTree !== 'function' && typeof A.GetLayouts !== 'function')) {
+    container.innerHTML = '<div class="empty-msg">API макетов недоступен</div>';
+    return;
+  }
+
+  var promise;
+  if (typeof A.GetLayoutsTree === 'function') {
+    promise = A.GetLayoutsTree();
+  } else {
+    // Fallback: простой список без групп
+    promise = A.GetLayouts().then(function(list) {
+      return [{
+        groupName: 'Макеты',
+        layouts: list
+      }];
+    });
+  }
+
+  promise.then(function(groups) {
+    if (!groups || groups.length === 0) {
+      container.innerHTML = '<div class="empty-msg">В проекте нет макетов</div>';
+      return;
+    }
+
+    var html = '<table><thead><tr><th style="width:32px;"></th><th>Макет</th></tr></thead><tbody>';
+    for (var gi = 0; gi < groups.length; gi++) {
+      var g = groups[gi];
+      var groupName = g.groupName || 'Группа';
+      var items = g.layouts || [];
+      html += '<tr class="layout-group-row"><td colspan="2">' + escapeHtml(groupName) + '</td></tr>';
+      for (var k = 0; k < items.length; k++) {
+        var it = items[k];
+        var idx = typeof it.index === 'number' ? it.index : k;
+        var name = it.name || ('Макет ' + (idx + 1));
+        html += '<tr class="layout-row">';
+        html += '<td style="text-align:center;"><input type="radio" name="existing-layout" value="' + idx + '"></td>';
+        html += '<td>' + escapeHtml(name) + '</td>';
+        html += '</tr>';
+      }
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }).catch(function() {
+    container.innerHTML = '<div class="empty-msg">Ошибка загрузки макетов</div>';
+  });
+}
+
+function getCurrentPlaceMode() {
+  var modes = document.querySelectorAll('input[name="place-mode"]');
+  for (var i = 0; i < modes.length; i++) {
+    if (modes[i].checked)
+      return modes[i].value;
+  }
+  return 'new';
+}
+
+function setupModeSwitch() {
+  var modeNewBlock = document.getElementById('mode-new-block');
+  var modeNewLayoutName = document.getElementById('mode-new-layout-name');
+  var modeExistingBlock = document.getElementById('mode-existing-block');
+  var modes = document.querySelectorAll('input[name="place-mode"]');
+
+  function applyMode() {
+    var mode = getCurrentPlaceMode();
+    if (modeNewBlock) modeNewBlock.style.display = (mode === 'new') ? '' : 'none';
+    if (modeNewLayoutName) modeNewLayoutName.style.display = (mode === 'new') ? '' : 'none';
+    if (modeExistingBlock) modeExistingBlock.style.display = (mode === 'existing') ? '' : 'none';
+
+    if (mode === 'existing') {
+      updateLayoutTable();
+    }
+  }
+
+  for (var i = 0; i < modes.length; i++) {
+    modes[i].addEventListener('change', applyMode);
+  }
+
+  applyMode();
+}
+
 function onOkClick() {
   var A = window.ACAPI;
   var masterSel = document.getElementById('master-select');
@@ -265,12 +398,6 @@ function onOkClick() {
 
   if (!A || typeof A.PlaceOnLayout !== 'function') {
     setInfo('Функция PlaceOnLayout недоступна.');
-    return;
-  }
-
-  var masterIndex = parseInt(masterSel.value, 10);
-  if (masterIndex < 0) {
-    setInfo('Выберите шаблон макета.');
     return;
   }
 
@@ -292,14 +419,51 @@ function onOkClick() {
   var fitScaleEl = document.getElementById('fit-scale');
   var fitScaleToLayout = fitScaleEl ? fitScaleEl.checked : false;
 
-  var params = {
-    masterLayoutIndex: masterIndex,
-    layoutIndex: 0,
-    layoutName: layoutName,
-    drawingName: drawingName,
-    anchorPosition: anchorValue,
-    fitScaleToLayout: fitScaleToLayout
-  };
+  var mode = getCurrentPlaceMode();
+  var params;
+
+  if (mode === 'existing') {
+    // Размещение на существующем макете
+    var layoutRadios = document.querySelectorAll('input[name="existing-layout"]');
+    var layoutIndex = -1;
+    for (var j = 0; j < layoutRadios.length; j++) {
+      if (layoutRadios[j].checked) {
+        layoutIndex = parseInt(layoutRadios[j].value, 10);
+        break;
+      }
+    }
+    if (layoutIndex < 0 || isNaN(layoutIndex)) {
+      setInfo('Выберите существующий макет.');
+      document.getElementById('btn-ok').disabled = false;
+      return;
+    }
+
+    params = {
+      masterLayoutIndex: -1,
+      layoutIndex: layoutIndex,
+      layoutName: '',
+      drawingName: drawingName,
+      anchorPosition: anchorValue,
+      fitScaleToLayout: fitScaleToLayout
+    };
+  } else {
+    // Новый макет по шаблону (как раньше)
+    var masterIndex = parseInt(masterSel.value, 10);
+    if (isNaN(masterIndex) || masterIndex < 0) {
+      setInfo('Выберите шаблон макета.');
+      document.getElementById('btn-ok').disabled = false;
+      return;
+    }
+
+    params = {
+      masterLayoutIndex: masterIndex,
+      layoutIndex: 0,
+      layoutName: layoutName,
+      drawingName: drawingName,
+      anchorPosition: anchorValue,
+      fitScaleToLayout: fitScaleToLayout
+    };
+  }
 
   A.PlaceOnLayout(params).then(function(success) {
     document.getElementById('btn-ok').disabled = false;
@@ -317,6 +481,7 @@ function onOkClick() {
 function init() {
   updateSelectionList();
   updateMasterSelect();
+  setupModeSwitch();
 
   document.getElementById('btn-ok').addEventListener('click', onOkClick);
 
