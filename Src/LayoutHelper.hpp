@@ -43,6 +43,7 @@ namespace LayoutHelper {
 		double scale;               // 100 = 1:100
 		GS::UniString drawingName;  // имя вида (заголовок Drawing)
 		Anchor anchorPosition = Anchor::LeftBottom;
+		bool fitScaleToLayout = false;  // подогнать масштаб вида по размерам макета
 	};
 
 	/**

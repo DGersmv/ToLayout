@@ -166,6 +166,14 @@
     </div>
   </div>
 
+  <div class="section">
+    <label class="anchor-cell" style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+      <input type="checkbox" id="fit-scale" />
+      <span>Подогнать масштаб</span>
+    </label>
+    <p style="font-size:10px;color:#888;margin:4px 0 0 0;">Масштаб вида подгоняется под размер макета</p>
+  </div>
+
   <button class="button-ok" id="btn-ok">OK</button>
 
   <div class="info-msg" id="info-msg"></div>
@@ -281,12 +289,16 @@ function onOkClick() {
     }
   }
 
+  var fitScaleEl = document.getElementById('fit-scale');
+  var fitScaleToLayout = fitScaleEl ? fitScaleEl.checked : false;
+
   var params = {
     masterLayoutIndex: masterIndex,
     layoutIndex: 0,
     layoutName: layoutName,
     drawingName: drawingName,
-    anchorPosition: anchorValue
+    anchorPosition: anchorValue,
+    fitScaleToLayout: fitScaleToLayout
   };
 
   A.PlaceOnLayout(params).then(function(success) {

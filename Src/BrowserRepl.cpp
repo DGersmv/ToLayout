@@ -414,6 +414,10 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				else if (anchorStr == "MM") p.anchorPosition = LayoutHelper::PlaceParams::Anchor::Middle;
 				else p.anchorPosition = LayoutHelper::PlaceParams::Anchor::LeftBottom;
 			}
+			if (tbl.Get("fitScaleToLayout", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
+					p.fitScaleToLayout = vv->GetBool();
+			}
 		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			p.layoutIndex = static_cast<Int32>(v->GetInteger());
 		}
