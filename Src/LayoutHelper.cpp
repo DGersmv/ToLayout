@@ -704,6 +704,101 @@ static bool CreateLayerCombForSelection (const GS::HashSet<API_AttributeIndex>& 
 }
 
 // -----------------------------------------------------------------------------
+// Клонировать вид из View Map в новый вид temp_<имя> (для палитры «Организация чертежей»).
+// Исходный вид не изменяется. Возвращает GUID клона или APINULLGuid при ошибке.
+// -----------------------------------------------------------------------------
+static API_Guid CloneViewMapViewToTemp (const API_Guid& viewMapViewGuid, GS::UniString& outCloneName)
+{
+	outCloneName = GS::UniString ();
+
+	// Навигаторный элемент вида в Карте видов
+	API_NavigatorItem viewItem = {};
+	viewItem.guid = viewMapViewGuid;
+	viewItem.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorItem (&viewMapViewGuid, &viewItem) != NoError)
+		return APINULLGuid;
+
+	GS::UniString originalName = GS::UniString (viewItem.uName);
+	if (originalName.IsEmpty ())
+		originalName = GS::UniString ("Вид");
+	outCloneName = GS::UniString ("temp_") + originalName;
+
+	// Ищем исходный элемент в Project Map через уже отлаженную стратегию GetProjectMapItemForCurrentView,
+	// временно переключив текущую базу на базу этого вида.
+	API_Guid sourceGuid = {};
+	API_DatabaseInfo prevDb = {};
+	if (ACAPI_Database_GetCurrentDatabase (&prevDb) != NoError)
+		return APINULLGuid;
+
+	API_DatabaseInfo targetDb = viewItem.db;
+	if (ACAPI_Database_ChangeCurrentDatabase (&targetDb) != NoError) {
+		ACAPI_Database_ChangeCurrentDatabase (&prevDb);
+		return APINULLGuid;
+	}
+
+	bool gotSource = GetProjectMapItemForCurrentView (sourceGuid);
+
+	// Возвращаемся в исходную базу независимо от результата
+	ACAPI_Database_ChangeCurrentDatabase (&prevDb);
+
+	if (!gotSource || sourceGuid == APINULLGuid)
+		return APINULLGuid;
+
+	API_NavigatorSet viewSet = {};
+	viewSet.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorSet (&viewSet) != NoError)
+		return APINULLGuid;
+	API_NavigatorItem rootItem = {};
+	rootItem.guid = viewSet.rootGuid;
+	rootItem.mapId = API_PublicViewMap;
+	GS::Array<API_NavigatorItem> rootChildren;
+	if (ACAPI_Navigator_GetNavigatorChildrenItems (&rootItem, &rootChildren) != NoError || rootChildren.IsEmpty ())
+		return APINULLGuid;
+	API_Guid parentGuid = rootChildren[0].guid;
+	API_Guid clonedGuid = {};
+	if (ACAPI_Navigator_CloneProjectMapItemToViewMap (&sourceGuid, &parentGuid, &clonedGuid) != NoError || clonedGuid == APINULLGuid)
+		return APINULLGuid;
+
+	// Копируем zoom, масштаб и комбинацию слоёв из исходного вида в клон
+	API_NavigatorView origView = {};
+	API_NavigatorItem origNavItem = {};
+	origNavItem.guid = viewMapViewGuid;
+	origNavItem.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorView (&origNavItem, &origView) == NoError) {
+		API_NavigatorItem clonedNavItem = {};
+		clonedNavItem.guid = clonedGuid;
+		clonedNavItem.mapId = API_PublicViewMap;
+		API_NavigatorView cloneView = {};
+		if (ACAPI_Navigator_GetNavigatorView (&clonedNavItem, &cloneView) == NoError) {
+			cloneView.zoom = origView.zoom;
+			cloneView.saveZoom = origView.saveZoom;
+			cloneView.drawingScale = origView.drawingScale;
+			cloneView.saveDScale = origView.saveDScale;
+			CHCopyC (origView.layerCombination, cloneView.layerCombination);
+			cloneView.saveLaySet = origView.saveLaySet;
+			ACAPI_Navigator_ChangeNavigatorView (&clonedNavItem, &cloneView);
+			if (cloneView.layerStats != nullptr) {
+				delete cloneView.layerStats;
+				cloneView.layerStats = nullptr;
+			}
+		}
+		if (origView.layerStats != nullptr) {
+			delete origView.layerStats;
+			origView.layerStats = nullptr;
+		}
+	}
+
+	// Имя клона: temp_<имя>
+	API_NavigatorItem clonedNavItem = {};
+	if (ACAPI_Navigator_GetNavigatorItem (&clonedGuid, &clonedNavItem) == NoError) {
+		clonedNavItem.customName = true;
+		GS::ucscpy (clonedNavItem.uName, outCloneName.ToUStr ());
+		ACAPI_Navigator_ChangeNavigatorItem (&clonedNavItem);
+	}
+	return clonedGuid;
+}
+
+// -----------------------------------------------------------------------------
 // Создать новый вид во вкладке «Виды»: клон текущего вида + фильтр слоёв
 // customViewName — имя вида в Карте Видов (пустое = не менять)
 // zoomBox — опционально: рамка обрезки вида (bounding box выделения + отступ)
@@ -744,6 +839,15 @@ static API_Guid CloneViewToViewMapWithLayerFilter (const GS::HashSet<API_Attribu
 				navView.drawingScale = drawingScale;
 				navView.saveDScale = true;
 				ACAPI_Navigator_ChangeNavigatorView (&clonedNavItem, &navView);
+			}
+		}
+		// Присваиваем имя вида даже когда не создаём отдельную комбинацию слоёв (режим «по рамке» и т.п.).
+		if (!customViewName.IsEmpty ()) {
+			API_NavigatorItem clonedNavItem = {};
+			if (ACAPI_Navigator_GetNavigatorItem (&clonedGuid, &clonedNavItem) == NoError) {
+				clonedNavItem.customName = true;
+				GS::ucscpy (clonedNavItem.uName, customViewName.ToUStr ());
+				ACAPI_Navigator_ChangeNavigatorItem (&clonedNavItem);
 			}
 		}
 		return clonedGuid;
@@ -835,7 +939,13 @@ static void GetGridRegionRect (const API_LayoutInfo& layoutInfo,
 	const double cellW = (availW - (gridCols - 1) * gap) / gridCols;
 	const double cellH = (availH - (gridRows - 1) * gap) / gridRows;
 	outLeftMm   = layoutInfo.leftMargin + startCol * (cellW + gap);
-	outBottomMm = layoutInfo.bottomMargin + startRow * (cellH + gap);
+	// В HTML-палитре строки нумеруются сверху вниз, а геометрия макета считает их от нижнего поля вверх.
+	// Конвертируем индекс строки: rowFromBottom = gridRows - (startRow + spanRows).
+	if (spanRows < 1) spanRows = 1;
+	if (spanRows > gridRows) spanRows = gridRows;
+	Int32 rowFromBottom = gridRows - (startRow + spanRows);
+	if (rowFromBottom < 0) rowFromBottom = 0;
+	outBottomMm = layoutInfo.bottomMargin + rowFromBottom * (cellH + gap);
 	outWidthMm  = spanCols * cellW + (spanCols > 1 ? (spanCols - 1) * gap : 0);
 	outHeightMm = spanRows * cellH + (spanRows > 1 ? (spanRows - 1) * gap : 0);
 }
@@ -933,6 +1043,20 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
 			zoomBox = navView.zoom;
 			hasZoomBox = (navView.zoom.xMax > navView.zoom.xMin + 1e-6 && navView.zoom.yMax > navView.zoom.yMin + 1e-6);
+
+			// Лог текущих параметров вида, который размещаем (масштаб, комбинация слоёв, zoom)
+			char msg[512];
+			std::snprintf (msg, sizeof (msg),
+				"ToLayout view: guid=%s, dScale=%d saveD=%d, layComb='%s' saveLay=%d, zoom=[%.3f..%.3f]x[%.3f..%.3f]",
+				APIGuidToString (params.placeViewGuid).ToCStr ().Get (),
+				navView.drawingScale,
+				navView.saveDScale ? 1 : 0,
+				navView.layerCombination,
+				navView.saveLaySet ? 1 : 0,
+				navView.zoom.xMin, navView.zoom.xMax,
+				navView.zoom.yMin, navView.zoom.yMax);
+			ACAPI_WriteReport (msg, false);
+
 			if (navView.layerStats != nullptr) {
 				delete navView.layerStats;
 				navView.layerStats = nullptr;
@@ -1001,26 +1125,49 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			if (availWmm > 1.0 && availHmm > 1.0) {
 				double scaleW = extentW * 1000.0 / availWmm;
 				double scaleH = extentH * 1000.0 / availHmm;
-				// При размещении в сектор сетки — вписать вид целиком (min); иначе — заполнить область (max)
-				double fitScale = fitToRegion
-					? ((scaleW < scaleH) ? scaleW : scaleH)
-					: ((scaleW > scaleH) ? scaleW : scaleH);
+				// Масштаб определяется требованием, чтобы и по ширине, и по высоте вид поместился в область:
+				// размер = extent * 1000 / scale, поэтому нужен scale >= max(scaleW, scaleH).
+				double fitScale = (scaleW > scaleH) ? scaleW : scaleH;
 				if (fitScale < 1.0) fitScale = 1.0;
 				if (fitScale > 10000.0) fitScale = 10000.0;
 				currentScale = fitScale;
+
+				// Диагностика расчёта масштаба для размещения
+				char msg[512];
+				std::snprintf (msg, sizeof (msg),
+					"ToLayout scale: layout size=%.1f x %.1f mm, margins L=%.1f R=%.1f T=%.1f B=%.1f, avail=%.1f x %.1f mm, "
+					"extent=%.3f x %.3f model, scaleW=%.1f, scaleH=%.1f, chosenScale=%.1f (fitToRegion=%s)",
+					layoutInfo.sizeX, layoutInfo.sizeY,
+					layoutInfo.leftMargin, layoutInfo.rightMargin, layoutInfo.topMargin, layoutInfo.bottomMargin,
+					availWmm, availHmm,
+					extentW, extentH,
+					scaleW, scaleH, currentScale,
+					fitToRegion ? "true" : "false");
+				ACAPI_WriteReport (msg, false);
 			}
 		}
 	}
 	GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
 	API_Guid viewGuidForDrawing = APINULLGuid;
 	if (placeByGuid) {
-		viewGuidForDrawing = params.placeViewGuid;
-		if (drawingName == GS::UniString ("Новый вид")) {
-			API_NavigatorItem navItem = {};
-			navItem.guid = params.placeViewGuid;
-			navItem.mapId = API_PublicViewMap;
-			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
-				drawingName = GS::UniString (navItem.uName);
+		if (params.cloneViewForPlacement) {
+			GS::UniString cloneName;
+			API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
+			if (cloneGuid == APINULLGuid) {
+				ACAPI_WriteReport ("LayoutHelper: не удалось клонировать вид (temp_имя); размещение отменено.", true);
+				return false;
+			}
+			viewGuidForDrawing = cloneGuid;
+			drawingName = cloneName;
+		} else {
+			viewGuidForDrawing = params.placeViewGuid;
+			if (drawingName == GS::UniString ("Новый вид")) {
+				API_NavigatorItem navItem = {};
+				navItem.guid = params.placeViewGuid;
+				navItem.mapId = API_PublicViewMap;
+				if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
+					drawingName = GS::UniString (navItem.uName);
+			}
 		}
 	} else {
 		// В режиме «Выбрать по рамке» — вид как есть, без фильтра слоёв; обрезка по рамке через клон (не трогаем текущий вид)
@@ -1079,6 +1226,19 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	const double sizeW_m = sizeMmW * 0.001;
 	const double sizeH_m = sizeMmH * 0.001;
 
+	// Лог размеров чертежа на макете
+	{
+		char msg[512];
+		std::snprintf (msg, sizeof (msg),
+			"ToLayout drawing: extent=%.3f x %.3f model, scale=%.1f, frame=%.1f x %.1f mm (%.3f x %.3f m), placeByGuid=%s",
+			extentW, extentH,
+			currentScale,
+			sizeMmW, sizeMmH,
+			sizeW_m, sizeH_m,
+			placeByGuid ? "true" : "false");
+		ACAPI_WriteReport (msg, false);
+	}
+
 	API_AnchorID anchorId = APIAnc_LB;
 	API_Coord drawPos = { 0.0, 0.0 };
 	if (params.useGridRegion && params.gridRows > 0 && params.gridCols > 0 && regionWmm > 0 && regionHmm > 0) {
@@ -1086,6 +1246,17 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		drawPos.x = regionLeftMm * 0.001;
 		drawPos.y = regionBottomMm * 0.001;
 		anchorId = APIAnc_LB;
+
+		// Лог параметров сетки и выбранного сектора
+		char msg[512];
+		std::snprintf (msg, sizeof (msg),
+			"ToLayout grid: rows=%d, cols=%d, gap=%.1f mm, region row=%d col=%d span=%d x %d, "
+			"regionRect=left=%.1f bottom=%.1f size=%.1f x %.1f mm, anchor=LB, pos=(%.3f, %.3f)m",
+			params.gridRows, params.gridCols, params.gridGapMm,
+			params.regionStartRow, params.regionStartCol, params.regionSpanRows, params.regionSpanCols,
+			regionLeftMm, regionBottomMm, regionWmm, regionHmm,
+			drawPos.x, drawPos.y);
+		ACAPI_WriteReport (msg, false);
 	} else {
 		GetDrawingPositionForAnchor (layoutInfo, params.anchorPosition, anchorId, drawPos);
 		switch (params.anchorPosition) {
@@ -1111,6 +1282,17 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 				break;
 		}
 	}
+
+	// Общий лог финальной точки размещения и якоря (для обычного режима якорей по листу)
+	{
+		char msg[512];
+		std::snprintf (msg, sizeof (msg),
+			"ToLayout place: useGridRegion=%s, anchorId=%d, pos=(%.3f, %.3f)m",
+			(params.useGridRegion ? "true" : "false"),
+			static_cast<int> (anchorId),
+			drawPos.x, drawPos.y);
+		ACAPI_WriteReport (msg, false);
+	}
 	if (layoutInfo.customData != nullptr) {
 		delete layoutInfo.customData;
 		layoutInfo.customData = nullptr;
@@ -1131,11 +1313,11 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
 
-	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем.
+	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем. Используем viewGuidForDrawing (клон при cloneViewForPlacement или исходный вид).
 	const bool needTempViewScale = placeByGuid && (currentScale > 0) && (fabs (currentScale - viewScaleBeforeFit) > 0.01);
 	if (needTempViewScale) {
 		API_NavigatorItem navItem = {};
-		navItem.guid = params.placeViewGuid;
+		navItem.guid = viewGuidForDrawing;
 		navItem.mapId = API_PublicViewMap;
 		API_NavigatorView navView = {};
 		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
@@ -1168,7 +1350,7 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 
 	if (needTempViewScale) {
 		API_NavigatorItem navItem = {};
-		navItem.guid = params.placeViewGuid;
+		navItem.guid = viewGuidForDrawing;
 		navItem.mapId = API_PublicViewMap;
 		API_NavigatorView navView = {};
 		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {

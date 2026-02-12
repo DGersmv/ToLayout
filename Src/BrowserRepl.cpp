@@ -139,6 +139,78 @@ static void EnsureModelWindowIsActive()
 	(void)changeErr;
 }
 
+// --------------------- Layout working area helpers ---------------------
+// Возвращают размеры рабочей области макета (с учётом полей) в миллиметрах.
+static bool GetLayoutWorkingAreaByExistingIndex (Int32 layoutIndex, double& outWidthMm, double& outHeightMm)
+{
+	outWidthMm = outHeightMm = 0.0;
+
+	const GS::Array<LayoutHelper::LayoutItem> layouts = LayoutHelper::GetLayoutList ();
+	if (layoutIndex < 0 || layoutIndex >= static_cast<Int32> (layouts.GetSize ()))
+		return false;
+
+	API_LayoutInfo layoutInfo = {};
+	BNZeroMemory (&layoutInfo, sizeof (layoutInfo));
+	API_DatabaseUnId layoutDbId = layouts[layoutIndex].databaseUnId;
+	if (ACAPI_Navigator_GetLayoutSets (&layoutInfo, &layoutDbId) != NoError) {
+		if (layoutInfo.customData != nullptr) {
+			delete layoutInfo.customData;
+			layoutInfo.customData = nullptr;
+		}
+		return false;
+	}
+
+	const double availWmm = layoutInfo.sizeX - layoutInfo.leftMargin - layoutInfo.rightMargin;
+	const double availHmm = layoutInfo.sizeY - layoutInfo.topMargin - layoutInfo.bottomMargin;
+
+	if (layoutInfo.customData != nullptr) {
+		delete layoutInfo.customData;
+		layoutInfo.customData = nullptr;
+	}
+
+	if (availWmm <= 0.0 || availHmm <= 0.0)
+		return false;
+
+	outWidthMm = availWmm;
+	outHeightMm = availHmm;
+	return true;
+}
+
+static bool GetLayoutWorkingAreaByMasterIndex (Int32 masterIndex, double& outWidthMm, double& outHeightMm)
+{
+	outWidthMm = outHeightMm = 0.0;
+
+	const GS::Array<LayoutHelper::MasterLayoutItem> masters = LayoutHelper::GetMasterLayoutList ();
+	if (masterIndex < 0 || masterIndex >= static_cast<Int32> (masters.GetSize ()))
+		return false;
+
+	API_LayoutInfo layoutInfo = {};
+	BNZeroMemory (&layoutInfo, sizeof (layoutInfo));
+	API_DatabaseUnId masterId = masters[masterIndex].databaseUnId;
+	if (ACAPI_Navigator_GetLayoutSets (&layoutInfo, &masterId) != NoError) {
+		if (layoutInfo.customData != nullptr) {
+			delete layoutInfo.customData;
+			layoutInfo.customData = nullptr;
+		}
+		return false;
+	}
+
+	const double availWmm = layoutInfo.sizeX - layoutInfo.leftMargin - layoutInfo.rightMargin;
+	const double availHmm = layoutInfo.sizeY - layoutInfo.topMargin - layoutInfo.bottomMargin;
+
+	if (layoutInfo.customData != nullptr) {
+		delete layoutInfo.customData;
+		layoutInfo.customData = nullptr;
+	}
+
+	if (availWmm <= 0.0 || availHmm <= 0.0)
+		return false;
+
+	outWidthMm = availWmm;
+	outHeightMm = availHmm;
+	return true;
+}
+
 // --------------------- Project event handler ---------------------
 static GSErrCode NotificationHandler(API_NotifyEventID notifID, Int32 /*param*/)
 {
@@ -443,6 +515,51 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return jsArr;
 		}));
 
+	// Рабочая область макета (с учётом полей) для ориентира сетки в палитре «Организация чертежей»
+	// Вход: { mode: "existing"|"master", layoutIndex?: int, masterIndex?: int }
+	// Выход: { ok: bool, widthMm: double, heightMm: double }
+	jsACAPI->AddItem(new JS::Function("GetLayoutWorkingArea", [](GS::Ref<JS::Base> param) {
+		GS::UniString mode ("existing");
+		Int32 layoutIndex = -1;
+		Int32 masterIndex = -1;
+
+		if (GS::Ref<JS::Object> obj = GS::DynamicCast<JS::Object> (param)) {
+			const GS::HashTable<GS::UniString, GS::Ref<JS::Base>>& tbl = obj->GetItemTable ();
+			GS::Ref<JS::Base> item;
+			if (tbl.Get ("mode", &item)) {
+				GS::UniString m = GetStringFromJavaScriptVariable (item);
+				if (!m.IsEmpty ())
+					mode = m;
+			}
+			if (tbl.Get ("layoutIndex", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value> (item))
+					layoutIndex = static_cast<Int32> (vv->GetInteger ());
+			}
+			if (tbl.Get ("masterIndex", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value> (item))
+					masterIndex = static_cast<Int32> (vv->GetInteger ());
+			}
+		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value> (param)) {
+			// Для совместимости: если передано одно число — считаем его индексом существующего макета
+			if (v->GetType () == JS::Value::INTEGER)
+				layoutIndex = static_cast<Int32> (v->GetInteger ());
+		}
+
+		double w = 0.0, h = 0.0;
+		bool ok = false;
+		if (mode == "master" || mode == "template") {
+			ok = GetLayoutWorkingAreaByMasterIndex (masterIndex, w, h);
+		} else {
+			ok = GetLayoutWorkingAreaByExistingIndex (layoutIndex, w, h);
+		}
+
+		GS::Ref<JS::Object> result = new JS::Object ();
+		result->AddItem ("ok", new JS::Value (ok));
+		result->AddItem ("widthMm", new JS::Value (w));
+		result->AddItem ("heightMm", new JS::Value (h));
+		return result;
+		}));
+
 	jsACAPI->AddItem(new JS::Function("GetDrawingScale", [](GS::Ref<JS::Base>) {
 		return new JS::Value(LayoutHelper::GetCurrentDrawingScale());
 		}));
@@ -550,6 +667,10 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				p.regionSpanRows = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
 			if (tbl.Get("regionSpanCols", &item))
 				p.regionSpanCols = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
+			if (tbl.Get("cloneViewForPlacement", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
+					p.cloneViewForPlacement = vv->GetBool();
+			}
 		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			p.layoutIndex = static_cast<Int32>(v->GetInteger());
 		}

@@ -79,6 +79,7 @@
       </div>
     </div>
     <p style="font-size:10px;color:#666;margin:4px 0 0 0;">Нажмите на сектор, затем выберите вид и «Добавить в очередь».</p>
+    <p class="info-msg" id="assigned-sector-msg" style="margin:4px 0 0 0;font-weight:600;">Назначено: ничего не выбрано</p>
   </div>
 
   <div class="section">
@@ -106,6 +107,7 @@ var queue = [];
 var selectedViewGuid = null;
 var selectedSectorRow = null;
 var selectedSectorCol = null;
+var lastAspect = 'landscape';
 
 function setInfo(msg) {
   var el = document.getElementById('info-msg');
@@ -153,6 +155,8 @@ function renderLayoutTable(filterStr) {
     tr.addEventListener('click', function() {
       container.querySelectorAll('tr').forEach(function(r) { r.classList.remove('selected'); });
       tr.classList.add('selected');
+      // При смене выбранного макета обновляем формат превью сетки
+      updateGridAspectFromLayoutSelection();
     });
   });
 }
@@ -183,16 +187,34 @@ function getGridValues() {
   return { rows: rows, cols: cols };
 }
 
+function updateAssignedSectorMessage() {
+  var el = document.getElementById('assigned-sector-msg');
+  if (!el) return;
+  if (selectedSectorRow === null || selectedSectorCol === null) {
+    el.textContent = 'Назначено: ничего не выбрано';
+  } else {
+    el.textContent = 'Назначено: сектор (' + selectedSectorRow + ', ' + selectedSectorCol + ')';
+  }
+}
+
 function renderGrid() {
   var vals = getGridValues();
   var inner = document.getElementById('grid-inner');
   var labelCols = document.getElementById('grid-label-cols');
   var labelRows = document.getElementById('grid-label-rows');
   if (!inner) return;
+  // Обновляем размеры прямоугольника в соответствии с последним известным соотношением сторон
+  applyGridAspect(lastAspect);
   inner.style.gridTemplateColumns = 'repeat(' + vals.cols + ', 1fr)';
   inner.style.gridTemplateRows = 'repeat(' + vals.rows + ', 1fr)';
   labelCols.textContent = 'Столбцов: ' + vals.cols;
   labelRows.textContent = 'Строк: ' + vals.rows;
+  // Сбрасываем выбор сектора, если он выходит за границы новой сетки
+  if (selectedSectorRow !== null && (selectedSectorRow >= vals.rows || selectedSectorCol >= vals.cols)) {
+    selectedSectorRow = null;
+    selectedSectorCol = null;
+    updateAssignedSectorMessage();
+  }
   inner.innerHTML = '';
   for (var r = 0; r < vals.rows; r++) {
     for (var c = 0; c < vals.cols; c++) {
@@ -206,10 +228,76 @@ function renderGrid() {
         selectedSectorCol = parseInt(this.getAttribute('data-col'), 10);
         inner.querySelectorAll('.grid-cell').forEach(function(el) { el.classList.remove('selected'); });
         this.classList.add('selected');
+        updateAssignedSectorMessage();
       });
       inner.appendChild(cell);
     }
   }
+}
+
+// Адаптация прямоугольника сетки под формат листа (альбомный/книжный/квадратный)
+function applyGridAspect(aspect) {
+  var inner = document.getElementById('grid-inner');
+  if (!inner) return;
+  lastAspect = aspect || 'landscape';
+  var w, h;
+  if (lastAspect === 'portrait') {
+    w = 100;
+    h = 140;
+  } else if (lastAspect === 'square') {
+    w = 120;
+    h = 120;
+  } else { // landscape по умолчанию
+    w = 140;
+    h = 100;
+  }
+  inner.style.width = w + 'px';
+  inner.style.height = h + 'px';
+}
+
+// Запрос формата рабочей области макета из ACAPI и обновление превью
+function updateGridAspectFromLayoutSelection() {
+  var A = window.ACAPI;
+  if (!A || typeof A.GetLayoutWorkingArea !== 'function') {
+    // Старые версии аддона: просто оставляем дефолтный прямоугольник
+    return;
+  }
+
+  var layoutModeEl = document.querySelector('input[name="layout-mode"]:checked');
+  var mode = layoutModeEl ? layoutModeEl.value : 'existing';
+
+  var params = {};
+  if (mode === 'new') {
+    var masterSel = document.getElementById('master-select');
+    var masterIndex = masterSel ? parseInt(masterSel.value, 10) : -1;
+    params = { mode: 'master', masterIndex: isNaN(masterIndex) ? -1 : masterIndex };
+  } else {
+    var layoutIndex = getSelectedLayoutIndex();
+    params = { mode: 'existing', layoutIndex: layoutIndex };
+  }
+
+  A.GetLayoutWorkingArea(params).then(function(info) {
+    if (!info || !info.ok) {
+      // Если не удалось получить данные, не ломаем существующую сетку
+      return;
+    }
+    var w = info.widthMm || 0;
+    var h = info.heightMm || 0;
+    if (w <= 0 || h <= 0) return;
+
+    var aspect = 'landscape';
+    var eps = 1.0;
+    if (Math.abs(w - h) <= eps) {
+      aspect = 'square';
+    } else if (h > w) {
+      aspect = 'portrait';
+    }
+    applyGridAspect(aspect);
+    // Перерисовываем сетку, чтобы учесть новые размеры контейнера
+    renderGrid();
+  }).catch(function() {
+    // Тихо игнорируем ошибку, чтобы палитра продолжала работать
+  });
 }
 
 function loadPlaceableViews() {
@@ -356,6 +444,9 @@ function onOkClick() {
       return;
     }
     var item = itemsToPlace[idx];
+    // В Archicad ряды сетки считаются от нижнего края листа вверх,
+    // а в HTML-таблице/preview индексы растут сверху вниз. Инвертируем индекс ряда.
+    var regionStartRow = (item.gridRows > 0) ? (item.gridRows - 1 - item.startRow) : item.startRow;
     var params = {
       masterLayoutIndex: layoutMode.value === 'new' ? masterLayoutIndex : -1,
       layoutIndex: layoutMode.value === 'existing' ? layoutIndex : 0,
@@ -365,11 +456,12 @@ function onOkClick() {
       gridRows: item.gridRows,
       gridCols: item.gridCols,
       gridGapMm: item.gapMm,
-      regionStartRow: item.startRow,
+      regionStartRow: regionStartRow,
       regionStartCol: item.startCol,
       regionSpanRows: item.spanRows,
       regionSpanCols: item.spanCols,
-      placeViewGuid: item.viewGuid
+      placeViewGuid: item.viewGuid,
+      cloneViewForPlacement: true
     };
     A.PlaceOnLayout(params).then(function(success) {
       if (!success) {
@@ -391,6 +483,7 @@ function init() {
   updateLayoutTable();
   loadPlaceableViews();
   renderGrid();
+  updateAssignedSectorMessage();
   var A = window.ACAPI;
   if (A && typeof A.GetMasterLayouts === 'function') {
     A.GetMasterLayouts().then(function(masters) {
@@ -420,21 +513,32 @@ function init() {
         existingBlock.style.display = 'none';
         newBlock.style.display = '';
       }
+      // При смене режима (существующий / новый из шаблона) обновляем ориентацию сетки
+      updateGridAspectFromLayoutSelection();
     });
   });
   document.getElementById('grid-rows').addEventListener('change', function() {
     selectedSectorRow = null;
     selectedSectorCol = null;
     renderGrid();
+    updateAssignedSectorMessage();
   });
   document.getElementById('grid-cols').addEventListener('change', function() {
     selectedSectorRow = null;
     selectedSectorCol = null;
     renderGrid();
+    updateAssignedSectorMessage();
   });
   document.getElementById('layout-search').addEventListener('input', function() {
     if (layoutGroupsData) renderLayoutTable(this.value);
   });
+  var masterSelEl = document.getElementById('master-select');
+  if (masterSelEl) {
+    masterSelEl.addEventListener('change', function() {
+      // При смене шаблона макета обновляем формат превью
+      updateGridAspectFromLayoutSelection();
+    });
+  }
   document.getElementById('view-search').addEventListener('input', function() {
     renderViewList(this.value);
   });
