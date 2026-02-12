@@ -1151,14 +1151,31 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	API_Guid viewGuidForDrawing = APINULLGuid;
 	if (placeByGuid) {
 		if (params.cloneViewForPlacement) {
-			GS::UniString cloneName;
-			API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
-			if (cloneGuid == APINULLGuid) {
-				ACAPI_WriteReport ("LayoutHelper: не удалось клонировать вид (temp_имя); размещение отменено.", true);
-				return false;
+			// Проверяем имя вида - если он уже начинается с "temp_", не клонируем повторно
+			API_NavigatorItem checkItem = {};
+			checkItem.guid = params.placeViewGuid;
+			checkItem.mapId = API_PublicViewMap;
+			bool skipCloning = false;
+			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &checkItem) == NoError) {
+				GS::UniString viewName = GS::UniString (checkItem.uName);
+				if (viewName.BeginsWith (GS::UniString ("temp_"))) {
+					// Вид уже клон - используем напрямую, не клонируем повторно
+					skipCloning = true;
+					viewGuidForDrawing = params.placeViewGuid;
+					drawingName = viewName;
+				}
 			}
-			viewGuidForDrawing = cloneGuid;
-			drawingName = cloneName;
+			
+			if (!skipCloning) {
+				GS::UniString cloneName;
+				API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
+				if (cloneGuid == APINULLGuid) {
+					ACAPI_WriteReport ("LayoutHelper: не удалось клонировать вид (temp_имя); размещение отменено.", true);
+					return false;
+				}
+				viewGuidForDrawing = cloneGuid;
+				drawingName = cloneName;
+			}
 		} else {
 			viewGuidForDrawing = params.placeViewGuid;
 			if (drawingName == GS::UniString ("Новый вид")) {
