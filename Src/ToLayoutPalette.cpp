@@ -168,11 +168,10 @@ GSErrCode ToLayoutPalette::RegisterPaletteControlCallBack()
 		API_PalEnabled_Section |
 		API_PalEnabled_Elevation |
 		API_PalEnabled_InteriorElevation |
-		API_PalEnabled_3D |
 		API_PalEnabled_Detail |
 		API_PalEnabled_Worksheet |
-		API_PalEnabled_Layout |
-		API_PalEnabled_DocumentFrom3D,
+		API_PalEnabled_DocumentFrom3D |
+		API_PalEnabled_Layout,
 		GSGuid2APIGuid(s_guid)
 	);
 }

@@ -37,4 +37,9 @@ constexpr short ToLayoutPaletteResId = 32620;
 constexpr short ToLayoutBrowserCtrlId = 1;
 constexpr short ToLayoutHtmlResId = 210;
 
+// OrganizeLayouts Palette (Организация чертежей в макетах)
+constexpr short OrganizeLayoutsPaletteResId = 32630;
+constexpr short OrganizeLayoutsBrowserCtrlId = 1;
+constexpr short OrganizeLayoutsHtmlResId = 220;
+
 #endif

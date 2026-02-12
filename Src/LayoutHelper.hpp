@@ -24,6 +24,16 @@ namespace LayoutHelper {
 	/** Список мастер-макетов (шаблоны: Титульный лист, Обложка) */
 	GS::Array<MasterLayoutItem> GetMasterLayoutList ();
 
+	/** Элемент списка видов для размещения на макете (палитра «Организация чертежей») */
+	struct PlaceableViewItem {
+		API_Guid viewGuid;
+		GS::UniString name;
+		GS::UniString typeName;  // «План», «Разрез», «Документ из 3D» и т.д.
+	};
+
+	/** Список видов из View Map, которые можно разместить на макете (планы, разрезы, фасады, детали, Документы из 3D) */
+	GS::Array<PlaceableViewItem> GetPlaceableViews ();
+
 	/** Текущий масштаб вида (100 = 1:100). Возвращает 100 при ошибке. */
 	double GetCurrentDrawingScale ();
 
@@ -44,6 +54,18 @@ namespace LayoutHelper {
 		GS::UniString drawingName;  // имя вида (заголовок Drawing)
 		Anchor anchorPosition = Anchor::LeftBottom;
 		bool fitScaleToLayout = false;  // подогнать масштаб вида по размерам макета
+		bool useMarqueeAsBoundary = false;  // граница чертежа из рамки (Marquee); для всех видов и 3D, при отсутствии рамки — fallback
+		// Область сетки на макете (палитра «Организация чертежей»): макс. 4×4
+		bool useGridRegion = false;
+		Int32 gridRows = 1;
+		Int32 gridCols = 1;
+		double gridGapMm = 0;
+		Int32 regionStartRow = 0;
+		Int32 regionStartCol = 0;
+		Int32 regionSpanRows = 1;
+		Int32 regionSpanCols = 1;
+		/** Размещать по GUID вида (из списка); если APINULLGuid — текущий вид */
+		API_Guid placeViewGuid = APINULLGuid;
 	};
 
 	/**

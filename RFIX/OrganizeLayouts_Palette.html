@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Организация чертежей в макетах</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #efefef; margin: 0; padding: 10px; color: #2f2f2f; font-size: 12px; }
+    .palette { max-width: 420px; }
+    h1 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+    .section { margin-bottom: 10px; }
+    .section-title { font-weight: 600; margin-bottom: 4px; font-size: 11px; color: #54524f; }
+    .grid-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+    .grid-row label { display: flex; align-items: center; gap: 4px; }
+    .grid-row input[type="number"] { width: 44px; padding: 4px; }
+    select, input[type="text"] { padding: 4px 6px; border: 1px solid #a8a5a2; background: #fff; }
+    .view-list { max-height: 140px; overflow-y: auto; border: 1px solid #c8c4c0; background: #fff; }
+    .view-list table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .view-list th { text-align: left; background: #dcd9d4; padding: 4px 6px; }
+    .view-list td { padding: 4px 6px; border-bottom: 1px solid #eee; cursor: pointer; }
+    .view-list tr:hover td { background: #f3f1ee; }
+    .view-list tr.selected td { background: #d4e8d4; }
+    .queue-list { max-height: 100px; overflow-y: auto; border: 1px solid #c8c4c0; background: #fff; font-size: 11px; padding: 4px; }
+    .queue-item { padding: 2px 0; border-bottom: 1px solid #eee; }
+    .btn { padding: 6px 10px; cursor: pointer; border: 1px solid #4f604f; background: #7a997a; color: #fff; border-radius: 2px; font-size: 12px; }
+    .btn:hover { background: #6a8a6a; }
+    .btn:disabled { background: #aaa; border-color: #888; cursor: default; }
+    .btn-secondary { background: #6a7a8a; border-color: #5a6a7a; }
+    .btn-secondary:hover { background: #5a6a7a; }
+    .info-msg { margin-top: 6px; font-size: 11px; min-height: 18px; }
+    .layout-table { max-height: 120px; overflow-y: auto; border: 1px solid #c8c4c0; background: #fff; }
+    .layout-table table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .layout-table td { padding: 4px 6px; cursor: pointer; }
+    .layout-table tr:hover td { background: #f3f1ee; }
+    .layout-table tr.selected td { background: #d4e8d4; }
+    .grid-preview-wrap { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .grid-label-rows { font-size: 11px; color: #54524f; writing-mode: vertical-rl; transform: rotate(180deg); min-height: 100px; display: flex; align-items: center; justify-content: center; }
+    .grid-preview-box { display: flex; flex-direction: column; align-items: stretch; }
+    .grid-label-cols { font-size: 11px; color: #54524f; text-align: center; margin-bottom: 2px; }
+    .grid-inner { display: grid; border: 2px solid #333; background: #ddd; gap: 1px; padding: 1px; }
+    .grid-inner { width: 140px; height: 100px; }
+    .grid-cell { background: #fff; cursor: pointer; min-height: 20px; min-width: 20px; }
+    .grid-cell:hover { background: #e8f0e8; }
+    .grid-cell.selected { background: #7a997a; }
+  </style>
+</head>
+<body>
+<div class="palette">
+  <h1>Организация чертежей в макетах</h1>
+
+  <div class="section">
+    <div class="section-title">Макет</div>
+    <div class="grid-row">
+      <label><input type="radio" name="layout-mode" value="existing" checked /> Существующий</label>
+      <label><input type="radio" name="layout-mode" value="new" /> Новый из шаблона</label>
+    </div>
+    <div id="layout-existing-block">
+      <input type="text" id="layout-search" placeholder="Поиск макета…" style="width:100%;margin-bottom:4px;" />
+      <div id="layout-table-container" class="layout-table">Загрузка…</div>
+    </div>
+    <div id="layout-new-block" style="display:none;">
+      <select id="master-select" style="width:100%;margin-bottom:4px;"><option value="-1">Загрузка…</option></select>
+      <input type="text" id="layout-name" placeholder="Имя макета" style="width:100%;" />
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Сетка макета</div>
+    <div class="grid-row">
+      <label>Столбцов: <input type="number" id="grid-cols" min="1" max="4" value="2" /></label>
+      <label>Строк: <input type="number" id="grid-rows" min="1" max="4" value="3" /></label>
+      <label>Зазор мм: <input type="number" id="grid-gap" min="0" value="0" style="width:40px;" /></label>
+    </div>
+    <div class="grid-preview-wrap">
+      <div class="grid-label-rows" id="grid-label-rows">Строк: 3</div>
+      <div class="grid-preview-box">
+        <div class="grid-label-cols" id="grid-label-cols">Столбцов: 2</div>
+        <div id="grid-inner" class="grid-inner landscape"></div>
+      </div>
+    </div>
+    <p style="font-size:10px;color:#666;margin:4px 0 0 0;">Нажмите на сектор, затем выберите вид и «Добавить в очередь».</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Вид</div>
+    <input type="text" id="view-search" placeholder="Поиск по имени вида…" style="width:100%;margin-bottom:4px;" />
+    <div id="view-list-container" class="view-list">Загрузка…</div>
+    <button type="button" class="btn" id="btn-add" style="margin-top:6px;">Добавить в очередь</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Очередь размещения</div>
+    <div id="queue-container" class="queue-list">Пусто. Выберите область, вид и нажмите «Добавить в очередь».</div>
+    <button type="button" class="btn" id="btn-ok" style="margin-top:8px;width:100%;">OK — разместить все</button>
+  </div>
+
+  <div class="info-msg" id="info-msg"></div>
+</div>
+
+<script type="text/javascript">
+"use strict";
+
+var layoutGroupsData = null;
+var placeableViews = [];
+var queue = [];
+var selectedViewGuid = null;
+var selectedSectorRow = null;
+var selectedSectorCol = null;
+
+function setInfo(msg) {
+  var el = document.getElementById('info-msg');
+  if (el) el.textContent = msg || '';
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+function getLayoutIndex() {
+  var radios = document.querySelectorAll('input[name="existing-layout"]');
+  for (var i = 0; i < radios.length; i++) {
+    if (radios[i].checked)
+      return parseInt(radios[i].value, 10);
+  }
+  return -1;
+}
+
+function renderLayoutTable(filterStr) {
+  var container = document.getElementById('layout-table-container');
+  if (!container || !layoutGroupsData || layoutGroupsData.length === 0) {
+    if (container && layoutGroupsData && layoutGroupsData.length === 0)
+      container.innerHTML = '<div style="padding:8px;">Нет макетов</div>';
+    return;
+  }
+  var q = (filterStr || '').trim().toLowerCase();
+  var html = '<table><tbody>';
+  for (var gi = 0; gi < layoutGroupsData.length; gi++) {
+    var g = layoutGroupsData[gi];
+    var items = g.layouts || [];
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var globalIndex = typeof it.index === 'number' ? it.index : k;
+      var name = (it.name || ('Макет ' + (globalIndex + 1))).toString();
+      if (q && name.toLowerCase().indexOf(q) === -1) continue;
+      html += '<tr data-index="' + globalIndex + '"><td>' + escapeHtml(name) + '</td></tr>';
+    }
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html || '<div style="padding:8px;">Нет совпадений</div>';
+  container.querySelectorAll('tr').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      container.querySelectorAll('tr').forEach(function(r) { r.classList.remove('selected'); });
+      tr.classList.add('selected');
+    });
+  });
+}
+
+function updateLayoutTable() {
+  var A = window.ACAPI;
+  var container = document.getElementById('layout-table-container');
+  if (!A || typeof A.GetLayoutsTree !== 'function') {
+    if (container) container.innerHTML = 'API недоступен';
+    return;
+  }
+  A.GetLayoutsTree().then(function(groups) {
+    layoutGroupsData = groups;
+    if (!groups || groups.length === 0) {
+      container.innerHTML = '<div style="padding:8px;">Нет макетов</div>';
+      return;
+    }
+    renderLayoutTable(document.getElementById('layout-search').value);
+  }).catch(function() {
+    layoutGroupsData = null;
+    container.innerHTML = 'Ошибка загрузки';
+  });
+}
+
+function getGridValues() {
+  var rows = Math.max(1, Math.min(4, parseInt(document.getElementById('grid-rows').value, 10) || 1));
+  var cols = Math.max(1, Math.min(4, parseInt(document.getElementById('grid-cols').value, 10) || 1));
+  return { rows: rows, cols: cols };
+}
+
+function renderGrid() {
+  var vals = getGridValues();
+  var inner = document.getElementById('grid-inner');
+  var labelCols = document.getElementById('grid-label-cols');
+  var labelRows = document.getElementById('grid-label-rows');
+  if (!inner) return;
+  inner.style.gridTemplateColumns = 'repeat(' + vals.cols + ', 1fr)';
+  inner.style.gridTemplateRows = 'repeat(' + vals.rows + ', 1fr)';
+  labelCols.textContent = 'Столбцов: ' + vals.cols;
+  labelRows.textContent = 'Строк: ' + vals.rows;
+  inner.innerHTML = '';
+  for (var r = 0; r < vals.rows; r++) {
+    for (var c = 0; c < vals.cols; c++) {
+      var cell = document.createElement('div');
+      cell.className = 'grid-cell';
+      cell.setAttribute('data-row', r);
+      cell.setAttribute('data-col', c);
+      if (selectedSectorRow === r && selectedSectorCol === c) cell.classList.add('selected');
+      cell.addEventListener('click', function() {
+        selectedSectorRow = parseInt(this.getAttribute('data-row'), 10);
+        selectedSectorCol = parseInt(this.getAttribute('data-col'), 10);
+        inner.querySelectorAll('.grid-cell').forEach(function(el) { el.classList.remove('selected'); });
+        this.classList.add('selected');
+      });
+      inner.appendChild(cell);
+    }
+  }
+}
+
+function loadPlaceableViews() {
+  var A = window.ACAPI;
+  var container = document.getElementById('view-list-container');
+  if (!A || typeof A.GetPlaceableViews !== 'function') {
+    container.innerHTML = 'API недоступен';
+    return Promise.reject();
+  }
+  return A.GetPlaceableViews().then(function(list) {
+    if (!list || !Array.isArray(list)) {
+      setInfo('Обновление видов: неверный ответ API.');
+      return Promise.reject();
+    }
+    placeableViews = list;
+    renderViewList(document.getElementById('view-search').value);
+  }).catch(function() {
+    setInfo('Ошибка загрузки видов. Список не изменён.');
+    if (placeableViews.length > 0) {
+      renderViewList(document.getElementById('view-search').value);
+    }
+    return Promise.reject();
+  });
+}
+
+function renderViewList(filterStr) {
+  var container = document.getElementById('view-list-container');
+  var q = (filterStr || '').trim().toLowerCase();
+  var html = '<table><thead><tr><th>Вид</th><th>Тип</th></tr></thead><tbody>';
+  for (var i = 0; i < placeableViews.length; i++) {
+    var v = placeableViews[i];
+    var name = (v.name || '').toString();
+    var typeName = (v.typeName || '').toString();
+    if (q && name.toLowerCase().indexOf(q) === -1 && typeName.toLowerCase().indexOf(q) === -1) continue;
+    var guid = (v.guid || '').toString();
+    var sel = (selectedViewGuid === guid) ? ' selected' : '';
+    html += '<tr data-guid="' + escapeHtml(guid) + '" class="' + sel + '"><td>' + escapeHtml(name) + '</td><td>' + escapeHtml(typeName) + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  container.querySelectorAll('tr[data-guid]').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      selectedViewGuid = tr.getAttribute('data-guid');
+      container.querySelectorAll('tr').forEach(function(r) { r.classList.remove('selected'); });
+      tr.classList.add('selected');
+    });
+  });
+}
+
+function renderQueue() {
+  var container = document.getElementById('queue-container');
+  if (queue.length === 0) {
+    container.innerHTML = 'Пусто. Выберите сектор в сетке, вид и нажмите «Добавить в очередь».';
+    return;
+  }
+  var html = '';
+  queue.forEach(function(item, i) {
+    html += '<div class="queue-item">' + (i + 1) + '. ' + escapeHtml(item.viewName) + ' → сектор (' + item.startRow + ', ' + item.startCol + ')</div>';
+  });
+  container.innerHTML = html;
+}
+
+function addToQueue() {
+  var A = window.ACAPI;
+  if (selectedSectorRow === null || selectedSectorCol === null) {
+    setInfo('Выберите сектор в сетке (нажмите на ячейку).');
+    return;
+  }
+  if (!selectedViewGuid) {
+    setInfo('Выберите вид из списка.');
+    return;
+  }
+  var viewName = '';
+  for (var i = 0; i < placeableViews.length; i++) {
+    if ((placeableViews[i].guid || '').toString() === selectedViewGuid) {
+      viewName = (placeableViews[i].name || '').toString();
+      break;
+    }
+  }
+  var vals = getGridValues();
+  queue.push({
+    viewGuid: selectedViewGuid,
+    viewName: viewName,
+    gridRows: vals.rows,
+    gridCols: vals.cols,
+    gapMm: parseFloat(document.getElementById('grid-gap').value) || 0,
+    startRow: selectedSectorRow,
+    startCol: selectedSectorCol,
+    spanRows: 1,
+    spanCols: 1
+  });
+  renderQueue();
+  setInfo('Добавлено в очередь. Можно выбрать другой сектор и вид и снова «Добавить».');
+}
+
+function getSelectedLayoutIndex() {
+  var container = document.getElementById('layout-table-container');
+  var sel = container && container.querySelector('tr.selected');
+  if (sel) return parseInt(sel.getAttribute('data-index'), 10);
+  return -1;
+}
+
+function onOkClick() {
+  var A = window.ACAPI;
+  if (!A || typeof A.PlaceOnLayout !== 'function') {
+    setInfo('API недоступен.');
+    return;
+  }
+  if (queue.length === 0) {
+    setInfo('Очередь пуста. Добавьте размещения.');
+    return;
+  }
+  var layoutMode = document.querySelector('input[name="layout-mode"]:checked');
+  var layoutIndex = -1;
+  var masterLayoutIndex = -1;
+  var layoutName = '';
+  if (layoutMode && layoutMode.value === 'new') {
+    masterLayoutIndex = parseInt(document.getElementById('master-select').value, 10);
+    layoutName = (document.getElementById('layout-name').value || 'Новый макет').trim();
+    if (isNaN(masterLayoutIndex) || masterLayoutIndex < 0) {
+      setInfo('Выберите шаблон макета.');
+      return;
+    }
+    if (queue.length > 1) {
+      setInfo('При создании нового макета размещается только первый вид. Остальные добавьте после, выбрав созданный макет.');
+    }
+  } else {
+    layoutIndex = getSelectedLayoutIndex();
+    if (layoutIndex < 0) {
+      setInfo('Выберите макет в списке.');
+      return;
+    }
+  }
+  document.getElementById('btn-ok').disabled = true;
+  setInfo('Размещение…');
+  var idx = 0;
+  var itemsToPlace = (layoutMode.value === 'new' && queue.length > 1) ? queue.slice(0, 1) : queue;
+  function placeNext() {
+    if (idx >= itemsToPlace.length) {
+      document.getElementById('btn-ok').disabled = false;
+      setInfo('Размещено: ' + itemsToPlace.length + ' вид(ов).');
+      queue = [];
+      renderQueue();
+      return;
+    }
+    var item = itemsToPlace[idx];
+    var params = {
+      masterLayoutIndex: layoutMode.value === 'new' ? masterLayoutIndex : -1,
+      layoutIndex: layoutMode.value === 'existing' ? layoutIndex : 0,
+      layoutName: layoutName,
+      drawingName: item.viewName,
+      useGridRegion: true,
+      gridRows: item.gridRows,
+      gridCols: item.gridCols,
+      gridGapMm: item.gapMm,
+      regionStartRow: item.startRow,
+      regionStartCol: item.startCol,
+      regionSpanRows: item.spanRows,
+      regionSpanCols: item.spanCols,
+      placeViewGuid: item.viewGuid
+    };
+    A.PlaceOnLayout(params).then(function(success) {
+      if (!success) {
+        setInfo('Ошибка при размещении «' + item.viewName + '».');
+        document.getElementById('btn-ok').disabled = false;
+        return;
+      }
+      idx++;
+      placeNext();
+    }).catch(function() {
+      setInfo('Ошибка при размещении.');
+      document.getElementById('btn-ok').disabled = false;
+    });
+  }
+  placeNext();
+}
+
+function init() {
+  updateLayoutTable();
+  loadPlaceableViews();
+  renderGrid();
+  var A = window.ACAPI;
+  if (A && typeof A.GetMasterLayouts === 'function') {
+    A.GetMasterLayouts().then(function(masters) {
+      var sel = document.getElementById('master-select');
+      sel.innerHTML = '';
+      if (!masters || masters.length === 0) {
+        sel.innerHTML = '<option value="-1">Нет шаблонов</option>';
+        return;
+      }
+      for (var i = 0; i < masters.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = masters[i].index;
+        opt.textContent = masters[i].name || ('Шаблон ' + (i + 1));
+        sel.appendChild(opt);
+      }
+    });
+  }
+  document.querySelectorAll('input[name="layout-mode"]').forEach(function(r) {
+    r.addEventListener('change', function() {
+      var existingBlock = document.getElementById('layout-existing-block');
+      var newBlock = document.getElementById('layout-new-block');
+      if (this.value === 'existing') {
+        existingBlock.style.display = '';
+        newBlock.style.display = 'none';
+        updateLayoutTable();
+      } else {
+        existingBlock.style.display = 'none';
+        newBlock.style.display = '';
+      }
+    });
+  });
+  document.getElementById('grid-rows').addEventListener('change', function() {
+    selectedSectorRow = null;
+    selectedSectorCol = null;
+    renderGrid();
+  });
+  document.getElementById('grid-cols').addEventListener('change', function() {
+    selectedSectorRow = null;
+    selectedSectorCol = null;
+    renderGrid();
+  });
+  document.getElementById('layout-search').addEventListener('input', function() {
+    if (layoutGroupsData) renderLayoutTable(this.value);
+  });
+  document.getElementById('view-search').addEventListener('input', function() {
+    renderViewList(this.value);
+  });
+  document.getElementById('btn-add').addEventListener('click', addToQueue);
+  document.getElementById('btn-ok').addEventListener('click', onOkClick);
+}
+
+function whenReady(cb) {
+  if (window.ACAPI && typeof window.ACAPI.GetPlaceableViews === 'function') {
+    cb();
+    return;
+  }
+  var n = 0;
+  var iv = setInterval(function() {
+    if (window.ACAPI && typeof window.ACAPI.GetPlaceableViews === 'function') {
+      clearInterval(iv);
+      cb();
+    } else if (++n > 100) clearInterval(iv);
+  }, 50);
+}
+
+whenReady(init);
+</script>
+</body>
+</html>

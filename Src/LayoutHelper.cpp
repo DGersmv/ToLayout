@@ -12,6 +12,7 @@
 #include "uchar_t.hpp"
 #include <new>
 #include <cstdio>
+#include <cmath>
 
 namespace LayoutHelper {
 
@@ -131,6 +132,56 @@ GS::Array<MasterLayoutItem> GetMasterLayoutList ()
 			item.databaseUnId = id;
 			item.name = GS::UniString ("Master");
 			result.Push (item);
+		}
+	}
+	return result;
+}
+
+// -----------------------------------------------------------------------------
+// GetPlaceableViews — виды из View Map для палитры «Организация чертежей»
+// -----------------------------------------------------------------------------
+static const char* ViewTypeDisplayName (API_NavigatorItemTypeID itemType)
+{
+	switch (itemType) {
+		case API_StoryNavItem:              return "План";
+		case API_SectionNavItem:            return "Разрез";
+		case API_ElevationNavItem:          return "Фасад";
+		case API_InteriorElevationNavItem:  return "Внутренний фасад";
+		case API_DetailDrawingNavItem:      return "Деталь";
+		case API_WorksheetDrawingNavItem:   return "Рабочий лист";
+		case API_DocumentFrom3DNavItem:     return "Документ из 3D";
+		default:                            return "Вид";
+	}
+}
+
+GS::Array<PlaceableViewItem> GetPlaceableViews ()
+{
+	GS::Array<PlaceableViewItem> result;
+	const API_NavigatorItemTypeID types[] = {
+		API_StoryNavItem,
+		API_SectionNavItem,
+		API_ElevationNavItem,
+		API_InteriorElevationNavItem,
+		API_DetailDrawingNavItem,
+		API_WorksheetDrawingNavItem,
+		API_DocumentFrom3DNavItem
+	};
+	for (API_NavigatorItemTypeID itemType : types) {
+		API_NavigatorItem navItem = {};
+		BNZeroMemory (&navItem, sizeof (navItem));
+		navItem.mapId = API_PublicViewMap;
+		navItem.itemType = itemType;
+		GS::Array<API_NavigatorItem> items;
+		if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError)
+			continue;
+		for (UIndex i = 0; i < items.GetSize (); i++) {
+			PlaceableViewItem pvi;
+			pvi.viewGuid = items[i].guid;
+			pvi.name = GS::UniString (items[i].uName);
+			if (pvi.name.IsEmpty ())
+				pvi.name = GS::UniString ("Без имени");
+			pvi.typeName = GS::UniString (ViewTypeDisplayName (itemType));
+			result.Push (pvi);
 		}
 	}
 	return result;
@@ -393,6 +444,7 @@ static bool GetCurrentViewNavigatorItem (API_Guid& outGuid)
 		case APIWind_InteriorElevationID: itemType = API_InteriorElevationNavItem; break;
 		case APIWind_DetailID:         itemType = API_DetailDrawingNavItem; break;
 		case APIWind_WorksheetID:      itemType = API_WorksheetDrawingNavItem; break;
+		case APIWind_DocumentFrom3DID: itemType = API_DocumentFrom3DNavItem; break;
 		default: return false;
 	}
 	API_NavigatorItem navItem = {};
@@ -434,6 +486,7 @@ static bool GetProjectMapItemForCurrentView (API_Guid& outGuid)
 		case APIWind_InteriorElevationID: itemType = API_InteriorElevationNavItem; break;
 		case APIWind_DetailID:         itemType = API_DetailDrawingNavItem; break;
 		case APIWind_WorksheetID:      itemType = API_WorksheetDrawingNavItem; break;
+		case APIWind_DocumentFrom3DID: return false;  // не клонируем Document from 3D из Project Map
 		default: return false;
 	}
 	API_NavigatorItem navItem = {};
@@ -459,6 +512,68 @@ static bool GetProjectMapItemForCurrentView (API_Guid& outGuid)
 	if (!items.IsEmpty ())
 		outGuid = items[0].guid;
 	return !items.IsEmpty ();
+}
+
+// -----------------------------------------------------------------------------
+// Получить bounding box текущей рамки (Marquee). Работает на плане/разрезе при наличии рамки.
+// Для фасада, 3D и т.д. при отсутствии marquee возвращает false — тогда используется fallback.
+// -----------------------------------------------------------------------------
+static bool GetMarqueeBounds (API_Box& outBox)
+{
+	API_SelectionInfo selectionInfo = {};
+	GS::Array<API_Neig> selNeigs;
+	if (ACAPI_Selection_Get (&selectionInfo, &selNeigs, true) != NoError)
+		return false;
+	const bool isMarquee = (selectionInfo.typeID == API_MarqueePoly ||
+		selectionInfo.typeID == API_MarqueeHorBox ||
+		selectionInfo.typeID == API_MarqueeRotBox);
+	if (!isMarquee) {
+		BMKillHandle ((GSHandle*)&selectionInfo.marquee.coords);
+		return false;
+	}
+	const API_Region& marquee = selectionInfo.marquee;
+	bool ok = false;
+	if (marquee.coords != nullptr && marquee.nCoords > 0) {
+		API_Coord* coords = *marquee.coords;
+		double xMin = coords[0].x, yMin = coords[0].y, xMax = coords[0].x, yMax = coords[0].y;
+		for (Int32 i = 1; i < marquee.nCoords; i++) {
+			if (coords[i].x < xMin) xMin = coords[i].x;
+			if (coords[i].y < yMin) yMin = coords[i].y;
+			if (coords[i].x > xMax) xMax = coords[i].x;
+			if (coords[i].y > yMax) yMax = coords[i].y;
+		}
+		outBox.xMin = xMin;
+		outBox.yMin = yMin;
+		outBox.xMax = xMax;
+		outBox.yMax = yMax;
+		ok = (xMax > xMin + 1e-10 && yMax > yMin + 1e-10);
+	} else {
+		const double cx = 0.5 * (marquee.box.xMin + marquee.box.xMax);
+		const double cy = 0.5 * (marquee.box.yMin + marquee.box.yMax);
+		const double degToRad = 3.14159265358979323846 / 180.0;
+		const double a = marquee.boxRotAngle * degToRad;
+		const double cosA = cos (a);
+		const double sinA = sin (a);
+		double xMin = 1e30, yMin = 1e30, xMax = -1e30, yMax = -1e30;
+		for (int i = 0; i < 4; i++) {
+			double x = (i == 0 || i == 3) ? marquee.box.xMin : marquee.box.xMax;
+			double y = (i < 2) ? marquee.box.yMin : marquee.box.yMax;
+			double dx = x - cx, dy = y - cy;
+			double rx = cx + dx * cosA - dy * sinA;
+			double ry = cy + dx * sinA + dy * cosA;
+			if (rx < xMin) xMin = rx;
+			if (ry < yMin) yMin = ry;
+			if (rx > xMax) xMax = rx;
+			if (ry > yMax) yMax = ry;
+		}
+		outBox.xMin = xMin;
+		outBox.yMin = yMin;
+		outBox.xMax = xMax;
+		outBox.yMax = yMax;
+		ok = (xMax > xMin + 1e-10 && yMax > yMin + 1e-10);
+	}
+	BMKillHandle ((GSHandle*)&selectionInfo.marquee.coords);
+	return ok;
 }
 
 // -----------------------------------------------------------------------------
@@ -613,8 +728,26 @@ static API_Guid CloneViewToViewMapWithLayerFilter (const GS::HashSet<API_Attribu
 	API_Guid clonedGuid = {};
 	if (ACAPI_Navigator_CloneProjectMapItemToViewMap (&sourceGuid, &parentGuid, &clonedGuid) != NoError || clonedGuid == APINULLGuid)
 		return APINULLGuid;
-	if (selectedLayers.IsEmpty ())
+	if (selectedLayers.IsEmpty ()) {
+		if (zoomBox != nullptr) {
+			API_NavigatorItem clonedNavItem = {};
+			clonedNavItem.guid = clonedGuid;
+			clonedNavItem.mapId = API_PublicViewMap;
+			API_NavigatorView navView = {};
+			if (ACAPI_Navigator_GetNavigatorView (&clonedNavItem, &navView) == NoError) {
+				if (navView.layerStats != nullptr) {
+					delete navView.layerStats;
+					navView.layerStats = nullptr;
+				}
+				navView.zoom = *zoomBox;
+				navView.saveZoom = true;
+				navView.drawingScale = drawingScale;
+				navView.saveDScale = true;
+				ACAPI_Navigator_ChangeNavigatorView (&clonedNavItem, &navView);
+			}
+		}
 		return clonedGuid;
+	}
 	API_Attr_Head tempLayerCombHead = {};
 	if (!CreateLayerCombForSelection (selectedLayers, tempLayerCombHead))
 		return clonedGuid;
@@ -686,6 +819,28 @@ static void RestoreViewLayerState (ViewLayerState& state)
 }
 
 // -----------------------------------------------------------------------------
+// Вычислить прямоугольник области сетки в мм (left, bottom, width, height от левого нижнего угла листа).
+// Макет: layoutInfo; сетка gridRows×gridCols, зазор gridGapMm; область startRow, startCol, spanRows, spanCols.
+// -----------------------------------------------------------------------------
+static void GetGridRegionRect (const API_LayoutInfo& layoutInfo,
+	Int32 gridRows, Int32 gridCols, double gridGapMm,
+	Int32 startRow, Int32 startCol, Int32 spanRows, Int32 spanCols,
+	double& outLeftMm, double& outBottomMm, double& outWidthMm, double& outHeightMm)
+{
+	const double availW = layoutInfo.sizeX - layoutInfo.leftMargin - layoutInfo.rightMargin;
+	const double availH = layoutInfo.sizeY - layoutInfo.topMargin - layoutInfo.bottomMargin;
+	if (gridCols < 1) gridCols = 1;
+	if (gridRows < 1) gridRows = 1;
+	const double gap = gridGapMm > 0 ? gridGapMm : 0;
+	const double cellW = (availW - (gridCols - 1) * gap) / gridCols;
+	const double cellH = (availH - (gridRows - 1) * gap) / gridRows;
+	outLeftMm   = layoutInfo.leftMargin + startCol * (cellW + gap);
+	outBottomMm = layoutInfo.bottomMargin + startRow * (cellH + gap);
+	outWidthMm  = spanCols * cellW + (spanCols > 1 ? (spanCols - 1) * gap : 0);
+	outHeightMm = spanRows * cellH + (spanRows > 1 ? (spanRows - 1) * gap : 0);
+}
+
+// -----------------------------------------------------------------------------
 // Вычислить позицию вида на макете по точке привязки (как было до экспериментов с pos).
 // layoutInfo — параметры макета (sizeX, sizeY, margins в мм); pos в метрах.
 // outAnchor и outPos — куда на макете привязать выбранный угол/центр чертежа.
@@ -738,14 +893,22 @@ static void GetDrawingPositionForAnchor (const API_LayoutInfo& layoutInfo, Place
 // -----------------------------------------------------------------------------
 static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const PlaceParams& params)
 {
-	API_Guid dummyGuid = {};
-	if (!GetCurrentViewNavigatorItem (dummyGuid)) {
-		ACAPI_WriteReport ("Откройте план, разрез или фасад перед размещением.", true);
-		return false;
-	}
 	API_DatabaseInfo currentDb = {};
 	if (ACAPI_Database_GetCurrentDatabase (&currentDb) != NoError)
 		return false;
+	if (currentDb.typeID == APIWind_3DModelID) {
+		ACAPI_WriteReport ("Чтобы разместить вид из 3D, создайте Документ из 3D (меню Archicad), откройте его и нажмите Разместить в макете.", true);
+		return false;
+	}
+	const bool placeByGuid = (params.placeViewGuid != APINULLGuid);
+	if (!placeByGuid) {
+		API_Guid dummyGuid = {};
+		if (!GetCurrentViewNavigatorItem (dummyGuid)) {
+			ACAPI_WriteReport ("Откройте план, разрез, фасад или Документ из 3D перед размещением.", true);
+			return false;
+		}
+	}
+	// Параметры макета (размер листа, поля) — всегда для выбранного макета chosenLayoutId
 	API_LayoutInfo layoutInfo = {};
 	BNZeroMemory (&layoutInfo, sizeof (layoutInfo));
 	API_DatabaseUnId layoutDbId = chosenLayoutId;
@@ -755,10 +918,33 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			layoutInfo.customData = nullptr;
 		}
 	}
-	// Рамка контента вида: выделение+отступ или zoom текущего вида — тот же объём, что попадёт в чертёж
+	if (params.useGridRegion && (layoutInfo.sizeX < 1.0 || layoutInfo.sizeY < 1.0)) {
+		ACAPI_WriteReport ("LayoutHelper: не удалось получить размер выбранного макета (GetLayoutSets).", true);
+		return false;
+	}
+	// При размещении по GUID вида — сразу получаем zoom и масштаб из этого вида
 	API_Box zoomBox = {};
-	bool hasZoomBox = GetSelectionBoundsWithMargin (zoomBox);
-	if (!hasZoomBox) {
+	bool hasZoomBox = false;
+	if (placeByGuid) {
+		API_NavigatorItem navItem = {};
+		navItem.guid = params.placeViewGuid;
+		navItem.mapId = API_PublicViewMap;
+		API_NavigatorView navView = {};
+		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
+			zoomBox = navView.zoom;
+			hasZoomBox = (navView.zoom.xMax > navView.zoom.xMin + 1e-6 && navView.zoom.yMax > navView.zoom.yMin + 1e-6);
+			if (navView.layerStats != nullptr) {
+				delete navView.layerStats;
+				navView.layerStats = nullptr;
+			}
+		}
+	}
+	// Рамка контента вида: при «Выбрать по рамке» — из Marquee; иначе выделение+отступ или zoom текущего вида
+	if (!placeByGuid && params.useMarqueeAsBoundary)
+		hasZoomBox = GetMarqueeBounds (zoomBox);
+	if (!placeByGuid && !hasZoomBox)
+		hasZoomBox = GetSelectionBoundsWithMargin (zoomBox);
+	if (!placeByGuid && !hasZoomBox) {
 		API_Guid currentViewGuid = {};
 		if (GetCurrentViewNavigatorItem (currentViewGuid)) {
 			API_NavigatorItem navItem = {};
@@ -776,47 +962,97 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		}
 	}
 	double currentScale = GetCurrentDrawingScale ();
-	if (params.fitScaleToLayout && hasZoomBox) {
-		// Масштаб считаем по исходному размеру вида (zoomBox), чтобы центр и края совпадали с ожиданием
+	double viewScaleBeforeFit = currentScale;  // масштаб вида до подгонки (для восстановления при placeByGuid)
+	if (placeByGuid) {
+		API_NavigatorItem navItem = {};
+		navItem.guid = params.placeViewGuid;
+		navItem.mapId = API_PublicViewMap;
+		API_NavigatorView navView = {};
+		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
+			if (navView.saveDScale)
+				currentScale = static_cast<double> (navView.drawingScale);
+			viewScaleBeforeFit = currentScale;
+			if (navView.layerStats != nullptr) {
+				delete navView.layerStats;
+				navView.layerStats = nullptr;
+			}
+		}
+	}
+	double regionWmm = 0, regionHmm = 0;
+	double regionLeftMm = 0, regionBottomMm = 0;
+	if (params.useGridRegion && params.gridRows > 0 && params.gridCols > 0) {
+		GetGridRegionRect (layoutInfo,
+			params.gridRows, params.gridCols, params.gridGapMm,
+			params.regionStartRow, params.regionStartCol, params.regionSpanRows, params.regionSpanCols,
+			regionLeftMm, regionBottomMm, regionWmm, regionHmm);
+	}
+	const bool fitToRegion = params.useGridRegion && regionWmm > 1.0 && regionHmm > 1.0;
+	// При размещении в сектор — тот же принцип, что «Подогнать масштаб» в палитре «Расположить в макете»: подгонка по области (здесь область = сектор), размещение по точке (LB сектора, якорь LB).
+	if ((params.fitScaleToLayout || fitToRegion) && hasZoomBox) {
 		double extentW = zoomBox.xMax - zoomBox.xMin;
 		double extentH = zoomBox.yMax - zoomBox.yMin;
 		if (extentW > 1e-6 && extentH > 1e-6) {
 			double availWmm = layoutInfo.sizeX - layoutInfo.leftMargin - layoutInfo.rightMargin;
 			double availHmm = layoutInfo.sizeY - layoutInfo.topMargin - layoutInfo.bottomMargin;
+			if (fitToRegion) {
+				availWmm = regionWmm;
+				availHmm = regionHmm;
+			}
 			if (availWmm > 1.0 && availHmm > 1.0) {
 				double scaleW = extentW * 1000.0 / availWmm;
 				double scaleH = extentH * 1000.0 / availHmm;
-				double fitScale = (scaleW > scaleH) ? scaleW : scaleH;
+				// При размещении в сектор сетки — вписать вид целиком (min); иначе — заполнить область (max)
+				double fitScale = fitToRegion
+					? ((scaleW < scaleH) ? scaleW : scaleH)
+					: ((scaleW > scaleH) ? scaleW : scaleH);
 				if (fitScale < 1.0) fitScale = 1.0;
 				if (fitScale > 10000.0) fitScale = 10000.0;
 				currentScale = fitScale;
 			}
 		}
 	}
-	const GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
-	GS::HashSet<API_AttributeIndex> selectedLayers = GetLayersOfSelection ();
+	GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
 	API_Guid viewGuidForDrawing = APINULLGuid;
-	if (!selectedLayers.IsEmpty ()) {
-		viewGuidForDrawing = CloneViewToViewMapWithLayerFilter (
-			selectedLayers, static_cast<Int32> (currentScale), drawingName,
-			hasZoomBox ? &zoomBox : nullptr);
-	}
-	if (viewGuidForDrawing == APINULLGuid) {
-		GetCurrentViewNavigatorItem (viewGuidForDrawing);
-		if (viewGuidForDrawing == APINULLGuid) {
-			ACAPI_WriteReport ("Не удалось получить вид для размещения.", true);
-			return false;
+	if (placeByGuid) {
+		viewGuidForDrawing = params.placeViewGuid;
+		if (drawingName == GS::UniString ("Новый вид")) {
+			API_NavigatorItem navItem = {};
+			navItem.guid = params.placeViewGuid;
+			navItem.mapId = API_PublicViewMap;
+			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
+				drawingName = GS::UniString (navItem.uName);
 		}
-		API_NavigatorItem navItem = {};
-		navItem.guid = viewGuidForDrawing;
-		API_NavigatorView navView = {};
-		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-			navView.drawingScale = static_cast<Int32> (currentScale);
-			navView.saveDScale = true;
-			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-			if (navView.layerStats != nullptr) {
-				delete navView.layerStats;
-				navView.layerStats = nullptr;
+	} else {
+		// В режиме «Выбрать по рамке» — вид как есть, без фильтра слоёв; обрезка по рамке через клон (не трогаем текущий вид)
+		GS::HashSet<API_AttributeIndex> selectedLayers;
+		if (!params.useMarqueeAsBoundary)
+			selectedLayers = GetLayersOfSelection ();
+		if (!selectedLayers.IsEmpty ()) {
+			viewGuidForDrawing = CloneViewToViewMapWithLayerFilter (
+				selectedLayers, static_cast<Int32> (currentScale), drawingName,
+				hasZoomBox ? &zoomBox : nullptr);
+		} else if (params.useMarqueeAsBoundary && hasZoomBox) {
+			viewGuidForDrawing = CloneViewToViewMapWithLayerFilter (
+				selectedLayers, static_cast<Int32> (currentScale), drawingName, &zoomBox);
+		}
+		if (viewGuidForDrawing == APINULLGuid) {
+			GetCurrentViewNavigatorItem (viewGuidForDrawing);
+			if (viewGuidForDrawing == APINULLGuid) {
+				ACAPI_WriteReport ("Не удалось получить вид для размещения.", true);
+				return false;
+			}
+			API_NavigatorItem navItem = {};
+			navItem.guid = viewGuidForDrawing;
+			navItem.mapId = API_PublicViewMap;
+			API_NavigatorView navView = {};
+			if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
+				navView.drawingScale = static_cast<Int32> (currentScale);
+				navView.saveDScale = true;
+				ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
+				if (navView.layerStats != nullptr) {
+					delete navView.layerStats;
+					navView.layerStats = nullptr;
+				}
 			}
 		}
 	}
@@ -845,31 +1081,35 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 
 	API_AnchorID anchorId = APIAnc_LB;
 	API_Coord drawPos = { 0.0, 0.0 };
-	GetDrawingPositionForAnchor (layoutInfo, params.anchorPosition, anchorId, drawPos);
-	// Корректируем pos с учётом размера чертежа: после вычитания pos = левый нижний угол рамки
-	// LB — без изменений; LT — вычесть высоту; MM — половину размера; RT — ширину и высоту; RB — ширину
-	// Для LT/MM/RT/RB после корректировки передаём якорь LB (pos = левый нижний угол)
-	switch (params.anchorPosition) {
-		case PlaceParams::Anchor::LeftTop:
-			drawPos.y -= sizeH_m;
-			anchorId = APIAnc_LB;
-			break;
-		case PlaceParams::Anchor::Middle:
-			drawPos.x -= sizeW_m * 0.5;
-			drawPos.y -= sizeH_m * 0.5;
-			anchorId = APIAnc_LB;
-			break;
-		case PlaceParams::Anchor::RightTop:
-			drawPos.x -= sizeW_m;
-			drawPos.y -= sizeH_m;
-			anchorId = APIAnc_LB;
-			break;
-		case PlaceParams::Anchor::RightBottom:
-			drawPos.x -= sizeW_m;
-			anchorId = APIAnc_LB;
-			break;
-		default:
-			break;
+	if (params.useGridRegion && params.gridRows > 0 && params.gridCols > 0 && regionWmm > 0 && regionHmm > 0) {
+		// Позиция = левый нижний угол сектора (тот же принцип, что якорь на листе в «Расположить в макете»)
+		drawPos.x = regionLeftMm * 0.001;
+		drawPos.y = regionBottomMm * 0.001;
+		anchorId = APIAnc_LB;
+	} else {
+		GetDrawingPositionForAnchor (layoutInfo, params.anchorPosition, anchorId, drawPos);
+		switch (params.anchorPosition) {
+			case PlaceParams::Anchor::LeftTop:
+				drawPos.y -= sizeH_m;
+				anchorId = APIAnc_LB;
+				break;
+			case PlaceParams::Anchor::Middle:
+				drawPos.x -= sizeW_m * 0.5;
+				drawPos.y -= sizeH_m * 0.5;
+				anchorId = APIAnc_LB;
+				break;
+			case PlaceParams::Anchor::RightTop:
+				drawPos.x -= sizeW_m;
+				drawPos.y -= sizeH_m;
+				anchorId = APIAnc_LB;
+				break;
+			case PlaceParams::Anchor::RightBottom:
+				drawPos.x -= sizeW_m;
+				anchorId = APIAnc_LB;
+				break;
+			default:
+				break;
+		}
 	}
 	if (layoutInfo.customData != nullptr) {
 		delete layoutInfo.customData;
@@ -891,6 +1131,23 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
 
+	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем.
+	const bool needTempViewScale = placeByGuid && (currentScale > 0) && (fabs (currentScale - viewScaleBeforeFit) > 0.01);
+	if (needTempViewScale) {
+		API_NavigatorItem navItem = {};
+		navItem.guid = params.placeViewGuid;
+		navItem.mapId = API_PublicViewMap;
+		API_NavigatorView navView = {};
+		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
+			navView.drawingScale = static_cast<Int32> (currentScale);
+			navView.saveDScale = true;
+			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
+			if (navView.layerStats != nullptr) {
+				delete navView.layerStats;
+				navView.layerStats = nullptr;
+			}
+		}
+	}
 
 	err = ACAPI_CallUndoableCommand ("Place view on layout", [&] () -> GSErrCode {
 		API_DatabaseInfo layoutDb = {};
@@ -905,26 +1162,26 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			ACAPI_Database_ChangeCurrentDatabase (&currentDb);
 			return createErr;
 		}
-		// Сразу после создания выставляем pos и якорь по полям макета
-		API_Element getElem = {};
-		getElem.header.guid = element.header.guid;
-		getElem.header.type = API_ElemType (API_DrawingID);
-		if (ACAPI_Element_Get (&getElem, 0) == NoError) {
-			getElem.drawing.pos = drawPos;
-			getElem.drawing.anchorPoint = anchorId;
-			getElem.drawing.useOwnOrigoAsAnchor = false;
-			API_Element maskElem = {};
-			BNZeroMemory (&maskElem, sizeof (maskElem));
-			maskElem.header.type = API_ElemType (API_DrawingID);
-			maskElem.drawing.pos.x = 1.0;
-			maskElem.drawing.pos.y = 1.0;
-			maskElem.drawing.anchorPoint = APIAnc_LB;
-			maskElem.drawing.useOwnOrigoAsAnchor = true;
-			ACAPI_Element_Change (&getElem, &maskElem, nullptr, 0, false);
-		}
 		ACAPI_Database_ChangeCurrentDatabase (&currentDb);
 		return createErr;
 	});
+
+	if (needTempViewScale) {
+		API_NavigatorItem navItem = {};
+		navItem.guid = params.placeViewGuid;
+		navItem.mapId = API_PublicViewMap;
+		API_NavigatorView navView = {};
+		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
+			navView.drawingScale = static_cast<Int32> (viewScaleBeforeFit);
+			navView.saveDScale = true;
+			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
+			if (navView.layerStats != nullptr) {
+				delete navView.layerStats;
+				navView.layerStats = nullptr;
+			}
+		}
+	}
+
 	if (err != NoError) {
 		ACAPI_WriteReport ("LayoutHelper: не удалось создать Drawing на макете", true);
 		return false;

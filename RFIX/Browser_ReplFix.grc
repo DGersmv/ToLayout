@@ -25,6 +25,10 @@
 	"ToLayout_Palette.html"
 }
 
+'DATA' 220 "OrganizeLayouts Palette Html" {
+	"OrganizeLayouts_Palette.html"
+}
+
 /* Icons for native toolbar buttons */
 'GICN' 32100 "Table Icon" {
 	"Table"

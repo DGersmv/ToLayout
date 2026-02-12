@@ -447,6 +447,19 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return new JS::Value(LayoutHelper::GetCurrentDrawingScale());
 		}));
 
+	jsACAPI->AddItem(new JS::Function("GetPlaceableViews", [](GS::Ref<JS::Base>) {
+		const GS::Array<LayoutHelper::PlaceableViewItem> views = LayoutHelper::GetPlaceableViews();
+		GS::Ref<JS::Array> jsArr = new JS::Array();
+		for (UIndex i = 0; i < views.GetSize(); ++i) {
+			GS::Ref<JS::Object> obj = new JS::Object();
+			obj->AddItem("guid", new JS::Value(APIGuidToString(views[i].viewGuid)));
+			obj->AddItem("name", new JS::Value(views[i].name));
+			obj->AddItem("typeName", new JS::Value(views[i].typeName));
+			jsArr->AddItem(obj);
+		}
+		return jsArr;
+		}));
+
 	jsACAPI->AddItem(new JS::Function("PlaceOnLayout", [](GS::Ref<JS::Base> param) {
 		LayoutHelper::PlaceParams p = {};
 		p.masterLayoutIndex = -1;
@@ -509,6 +522,34 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
 					p.fitScaleToLayout = vv->GetBool();
 			}
+			if (tbl.Get("useMarqueeAsBoundary", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
+					p.useMarqueeAsBoundary = vv->GetBool();
+			}
+			// Палитра «Организация чертежей»: вид по GUID и область сетки
+			if (tbl.Get("placeViewGuid", &item)) {
+				GS::UniString guidStr = GetStringFromJavaScriptVariable(item);
+				if (!guidStr.IsEmpty())
+					p.placeViewGuid = APIGuidFromString(guidStr.ToCStr().Get());
+			}
+			if (tbl.Get("useGridRegion", &item)) {
+				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
+					p.useGridRegion = vv->GetBool();
+			}
+			if (tbl.Get("gridRows", &item))
+				p.gridRows = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
+			if (tbl.Get("gridCols", &item))
+				p.gridCols = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
+			if (tbl.Get("gridGapMm", &item))
+				p.gridGapMm = GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 0);
+			if (tbl.Get("regionStartRow", &item))
+				p.regionStartRow = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 0));
+			if (tbl.Get("regionStartCol", &item))
+				p.regionStartCol = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 0));
+			if (tbl.Get("regionSpanRows", &item))
+				p.regionSpanRows = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
+			if (tbl.Get("regionSpanCols", &item))
+				p.regionSpanCols = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
 		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			p.layoutIndex = static_cast<Int32>(v->GetInteger());
 		}
@@ -551,7 +592,8 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 	jsACAPI->AddItem(new JS::Function("LogMessage", [](GS::Ref<JS::Base> param) {
 		if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			if (v->GetType() == JS::Value::STRING) {
-				// Log message (commented out for production)
+				ACAPI_WriteReport("[JS] ", false);
+				ACAPI_WriteReport(v->GetString().ToCStr().Get(), false);
 			}
 		}
 		return new JS::Value(true);

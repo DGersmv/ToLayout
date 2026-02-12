@@ -11,7 +11,7 @@
 /* [   ] */		"227.info"
 /* [   ] */		"Работа с макетами"
 /* [  1] */		"Расположить в макете"
-/* [  2] */		"Создать 3D вид"
+/* [  2] */		"Организация чертежей в макетах"
 /* [  3] */		"Поддержка"
 /* [  4] */		"Toolbar"
 }
@@ -72,4 +72,14 @@
 
 'DLGH'  32620  DLG_32620_ToLayout_Browser {
 1   "ToLayout Browser Control"     Browser_0
+}
+
+/* --- Dockable palette: ORGANIZE LAYOUTS (Организация чертежей в макетах) ---------------------------------------*/
+
+'GDLG'  32630    Palette | topCaption | close | grow   0   0  420  520  "Организация чертежей в макетах"  {
+/* [  1] */ Browser         0   0  420  520
+}
+
+'DLGH'  32630  DLG_32630_OrganizeLayouts_Browser {
+1   "OrganizeLayouts Browser Control"     Browser_0
 }

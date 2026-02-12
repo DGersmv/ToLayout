@@ -191,6 +191,7 @@
 
   <div class="section" id="mode-existing-block" style="display:none;">
     <div class="section-title">Существующий макет</div>
+    <input type="text" class="text-input" id="layout-search" placeholder="Поиск по имени макета…" style="margin-bottom:6px;" />
     <div class="layout-table" id="layout-table-container">
       <div class="empty-msg">Загрузка…</div>
     </div>
@@ -221,7 +222,15 @@
     <p style="font-size:10px;color:#888;margin:4px 0 0 0;">Масштаб вида подгоняется под размер макета</p>
   </div>
 
-  <button class="button-ok" id="btn-ok">OK</button>
+  <div class="section">
+    <label class="anchor-cell" style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+      <input type="checkbox" id="use-marquee-boundary" />
+      <span>Выбрать по рамке</span>
+    </label>
+    <p style="font-size:10px;color:#888;margin:4px 0 0 0;">На плане/разрезе: выделите область рамкой. В других видах и 3D при отсутствии рамки используется zoom или выделение.</p>
+  </div>
+
+  <button type="button" class="button-ok" id="btn-ok">OK</button>
 
   <div class="info-msg" id="info-msg"></div>
 </div>
@@ -304,6 +313,52 @@ function updateMasterSelect() {
   });
 }
 
+var layoutGroupsData = null;
+
+function renderLayoutTable(filterStr) {
+  var container = document.getElementById('layout-table-container');
+  if (!container || !layoutGroupsData || layoutGroupsData.length === 0) {
+    if (container && layoutGroupsData && layoutGroupsData.length === 0)
+      container.innerHTML = '<div class="empty-msg">В проекте нет макетов</div>';
+    return;
+  }
+  var q = (filterStr || '').trim().toLowerCase();
+  var html = '<table><thead><tr><th style="width:32px;"></th><th>Макет</th></tr></thead><tbody>';
+  for (var gi = 0; gi < layoutGroupsData.length; gi++) {
+    var g = layoutGroupsData[gi];
+    var groupName = g.groupName || 'Группа';
+    var items = g.layouts || [];
+    var groupHasVisible = false;
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var name = it.name || ('Макет ' + (typeof it.index === 'number' ? it.index + 1 : k + 1));
+      if (q === '' || name.toLowerCase().indexOf(q) !== -1 || groupName.toLowerCase().indexOf(q) !== -1) {
+        groupHasVisible = true;
+        break;
+      }
+    }
+    if (!groupHasVisible && q !== '') continue;
+    html += '<tr class="layout-group-row"><td colspan="2">' + escapeHtml(groupName) + '</td></tr>';
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var idx = typeof it.index === 'number' ? it.index : k;
+      var name = it.name || ('Макет ' + (idx + 1));
+      var match = q === '' || name.toLowerCase().indexOf(q) !== -1 || groupName.toLowerCase().indexOf(q) !== -1;
+      if (!match) continue;
+      html += '<tr class="layout-row">';
+      html += '<td style="text-align:center;"><input type="radio" name="existing-layout" value="' + idx + '"></td>';
+      html += '<td>' + escapeHtml(name) + '</td>';
+      html += '</tr>';
+    }
+  }
+  html += '</tbody></table>';
+  if (html === '<table><thead><tr><th style="width:32px;"></th><th>Макет</th></tr></thead><tbody></tbody></table>') {
+    container.innerHTML = '<div class="empty-msg">Нет макетов по запросу</div>';
+    return;
+  }
+  container.innerHTML = html;
+}
+
 function updateLayoutTable() {
   var A = window.ACAPI;
   var container = document.getElementById('layout-table-container');
@@ -319,7 +374,6 @@ function updateLayoutTable() {
   if (typeof A.GetLayoutsTree === 'function') {
     promise = A.GetLayoutsTree();
   } else {
-    // Fallback: простой список без групп
     promise = A.GetLayouts().then(function(list) {
       return [{
         groupName: 'Макеты',
@@ -329,30 +383,15 @@ function updateLayoutTable() {
   }
 
   promise.then(function(groups) {
+    layoutGroupsData = groups;
     if (!groups || groups.length === 0) {
       container.innerHTML = '<div class="empty-msg">В проекте нет макетов</div>';
       return;
     }
-
-    var html = '<table><thead><tr><th style="width:32px;"></th><th>Макет</th></tr></thead><tbody>';
-    for (var gi = 0; gi < groups.length; gi++) {
-      var g = groups[gi];
-      var groupName = g.groupName || 'Группа';
-      var items = g.layouts || [];
-      html += '<tr class="layout-group-row"><td colspan="2">' + escapeHtml(groupName) + '</td></tr>';
-      for (var k = 0; k < items.length; k++) {
-        var it = items[k];
-        var idx = typeof it.index === 'number' ? it.index : k;
-        var name = it.name || ('Макет ' + (idx + 1));
-        html += '<tr class="layout-row">';
-        html += '<td style="text-align:center;"><input type="radio" name="existing-layout" value="' + idx + '"></td>';
-        html += '<td>' + escapeHtml(name) + '</td>';
-        html += '</tr>';
-      }
-    }
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    var filterInput = document.getElementById('layout-search');
+    renderLayoutTable(filterInput ? filterInput.value : '');
   }).catch(function() {
+    layoutGroupsData = null;
     container.innerHTML = '<div class="empty-msg">Ошибка загрузки макетов</div>';
   });
 }
@@ -387,10 +426,26 @@ function setupModeSwitch() {
     modes[i].addEventListener('change', applyMode);
   }
 
+  var layoutSearch = document.getElementById('layout-search');
+  if (layoutSearch) {
+    layoutSearch.addEventListener('input', function() {
+      if (layoutGroupsData) renderLayoutTable(this.value);
+    });
+    layoutSearch.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        if (layoutGroupsData) renderLayoutTable('');
+      }
+    });
+  }
+
   applyMode();
 }
 
+var placeInProgress = false;
+
 function onOkClick() {
+  if (placeInProgress) return;
   var A = window.ACAPI;
   var masterSel = document.getElementById('master-select');
   var layoutNameEl = document.getElementById('layout-name');
@@ -400,6 +455,7 @@ function onOkClick() {
     setInfo('Функция PlaceOnLayout недоступна.');
     return;
   }
+  placeInProgress = true;
 
   var layoutName = (layoutNameEl && layoutNameEl.value.trim()) ? layoutNameEl.value.trim() : 'Новый макет';
   var drawingName = (drawingNameEl && drawingNameEl.value.trim()) ? drawingNameEl.value.trim() : 'Новый вид';
@@ -418,6 +474,9 @@ function onOkClick() {
 
   var fitScaleEl = document.getElementById('fit-scale');
   var fitScaleToLayout = fitScaleEl ? fitScaleEl.checked : false;
+
+  var useMarqueeEl = document.getElementById('use-marquee-boundary');
+  var useMarqueeAsBoundary = useMarqueeEl ? useMarqueeEl.checked : false;
 
   var mode = getCurrentPlaceMode();
   var params;
@@ -444,7 +503,8 @@ function onOkClick() {
       layoutName: '',
       drawingName: drawingName,
       anchorPosition: anchorValue,
-      fitScaleToLayout: fitScaleToLayout
+      fitScaleToLayout: fitScaleToLayout,
+      useMarqueeAsBoundary: useMarqueeAsBoundary
     };
   } else {
     // Новый макет по шаблону (как раньше)
@@ -461,11 +521,13 @@ function onOkClick() {
       layoutName: layoutName,
       drawingName: drawingName,
       anchorPosition: anchorValue,
-      fitScaleToLayout: fitScaleToLayout
+      fitScaleToLayout: fitScaleToLayout,
+      useMarqueeAsBoundary: useMarqueeAsBoundary
     };
   }
 
   A.PlaceOnLayout(params).then(function(success) {
+    placeInProgress = false;
     document.getElementById('btn-ok').disabled = false;
     if (success) {
       setInfo('Выделение размещено в макете.');
@@ -473,6 +535,7 @@ function onOkClick() {
       setInfo('Не удалось разместить. Проверьте выделение.');
     }
   }).catch(function() {
+    placeInProgress = false;
     document.getElementById('btn-ok').disabled = false;
     setInfo('Ошибка при размещении.');
   });

@@ -17,6 +17,7 @@
 #include    "IdLayersPalette.hpp"
 #include    "SelectionDetailsPalette.hpp"
 #include    "ToLayoutPalette.hpp"
+#include    "OrganizeLayoutsPalette.hpp"
 #include    "LicenseManager.hpp"
 #include	"APICommon.h"
 
@@ -91,7 +92,8 @@ GSErrCode MenuCommandHandler (const API_MenuParams *menuParams)
 				case 1:  // "Расположить в макете"
 					ToLayoutPalette::ShowPalette();
 					break;
-				case 2:  // "Создать 3D вид" — позже
+				case 2:  // "Организация чертежей в макетах"
+					OrganizeLayoutsPalette::ShowPalette();
 					break;
 				case 3:  // "Поддержка" (Support)
 					{
@@ -223,6 +225,7 @@ GSErrCode Initialize ()
     palErr |= IdLayersPalette::RegisterPaletteControlCallBack ();
 	palErr |= SelectionDetailsPalette::RegisterPaletteControlCallBack ();
 	palErr |= ToLayoutPalette::RegisterPaletteControlCallBack ();
+	palErr |= OrganizeLayoutsPalette::RegisterPaletteControlCallBack ();
 
     if (DBERROR (palErr != NoError))
         return palErr;
