@@ -1164,13 +1164,11 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		GS::UniString cloneName;
 		API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
 		if (cloneGuid == APINULLGuid) {
-			// Если клонирование не удалось, fallback на оригинальный вид
-			ACAPI_WriteReport ("Не удалось клонировать вид, используется оригинал (возможны конфликты)", true);
-			viewGuidForDrawing = params.placeViewGuid;
-		} else {
-			viewGuidForDrawing = cloneGuid;
-			drawingName = cloneName;
+			ACAPI_WriteReport ("LayoutHelper: не удалось клонировать вид (temp_имя); размещение отменено.", true);
+			return false;
 		}
+		viewGuidForDrawing = cloneGuid;
+		drawingName = cloneName;
 	} else {
 		// В режиме «Выбрать по рамке» — вид как есть, без фильтра слоёв; обрезка по рамке через клон (не трогаем текущий вид)
 		GS::HashSet<API_AttributeIndex> selectedLayers;
