@@ -1150,15 +1150,6 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
 	API_Guid viewGuidForDrawing = APINULLGuid;
 	if (placeByGuid) {
-		// Получаем имя вида если не задано
-		if (drawingName == GS::UniString ("Новый вид")) {
-			API_NavigatorItem navItem = {};
-			navItem.guid = params.placeViewGuid;
-			navItem.mapId = API_PublicViewMap;
-			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
-				drawingName = GS::UniString (navItem.uName);
-		}
-		
 		// КРИТИЧЕСКИ ВАЖНО: всегда создаем клон вида вместо использования оригинала
 		// Это гарантирует, что каждый Drawing имеет свой независимый вид
 		GS::UniString cloneName;
