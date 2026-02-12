@@ -1150,24 +1150,26 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
 	API_Guid viewGuidForDrawing = APINULLGuid;
 	if (placeByGuid) {
-		if (params.cloneViewForPlacement) {
-			GS::UniString cloneName;
-			API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
-			if (cloneGuid == APINULLGuid) {
-				ACAPI_WriteReport ("LayoutHelper: не удалось клонировать вид (temp_имя); размещение отменено.", true);
-				return false;
-			}
+		// Получаем имя вида если не задано
+		if (drawingName == GS::UniString ("Новый вид")) {
+			API_NavigatorItem navItem = {};
+			navItem.guid = params.placeViewGuid;
+			navItem.mapId = API_PublicViewMap;
+			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
+				drawingName = GS::UniString (navItem.uName);
+		}
+		
+		// КРИТИЧЕСКИ ВАЖНО: всегда создаем клон вида вместо использования оригинала
+		// Это гарантирует, что каждый Drawing имеет свой независимый вид
+		GS::UniString cloneName;
+		API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
+		if (cloneGuid == APINULLGuid) {
+			// Если клонирование не удалось, fallback на оригинальный вид
+			ACAPI_WriteReport ("Не удалось клонировать вид, используется оригинал (возможны конфликты)", true);
+			viewGuidForDrawing = params.placeViewGuid;
+		} else {
 			viewGuidForDrawing = cloneGuid;
 			drawingName = cloneName;
-		} else {
-			viewGuidForDrawing = params.placeViewGuid;
-			if (drawingName == GS::UniString ("Новый вид")) {
-				API_NavigatorItem navItem = {};
-				navItem.guid = params.placeViewGuid;
-				navItem.mapId = API_PublicViewMap;
-				if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
-					drawingName = GS::UniString (navItem.uName);
-			}
 		}
 	} else {
 		// В режиме «Выбрать по рамке» — вид как есть, без фильтра слоёв; обрезка по рамке через клон (не трогаем текущий вид)
