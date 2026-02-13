@@ -84,6 +84,11 @@
 
   <div class="section">
     <div class="section-title">Вид</div>
+    <div class="grid-row" style="margin-bottom:6px;">
+      <label style="font-size:11px;"><input type="radio" name="view-sort" value="all" checked /> Все виды</label>
+      <label style="font-size:11px;"><input type="radio" name="view-sort" value="byType" /> По типу</label>
+      <label style="font-size:11px;"><input type="radio" name="view-sort" value="byFolder" /> По папкам</label>
+    </div>
     <input type="text" id="view-search" placeholder="Поиск по имени вида…" style="width:100%;margin-bottom:4px;" />
     <div id="view-list-container" class="view-list">Загрузка…</div>
     <button type="button" class="btn" id="btn-add" style="margin-top:6px;">Добавить в очередь</button>
@@ -326,15 +331,65 @@ function loadPlaceableViews() {
 function renderViewList(filterStr) {
   var container = document.getElementById('view-list-container');
   var q = (filterStr || '').trim().toLowerCase();
-  var html = '<table><thead><tr><th>Вид</th><th>Тип</th></tr></thead><tbody>';
+  
+  // Получаем режим сортировки
+  var sortModeEl = document.querySelector('input[name="view-sort"]:checked');
+  var sortMode = sortModeEl ? sortModeEl.value : 'all';
+  
+  // Фильтрация и сортировка
+  var filteredViews = [];
   for (var i = 0; i < placeableViews.length; i++) {
     var v = placeableViews[i];
     var name = (v.name || '').toString();
     var typeName = (v.typeName || '').toString();
-    if (q && name.toLowerCase().indexOf(q) === -1 && typeName.toLowerCase().indexOf(q) === -1) continue;
+    var folderPath = (v.folderPath || '').toString();
+    if (q && name.toLowerCase().indexOf(q) === -1 && typeName.toLowerCase().indexOf(q) === -1 && folderPath.toLowerCase().indexOf(q) === -1) continue;
+    filteredViews.push(v);
+  }
+  
+  // Сортировка по выбранному режиму
+  if (sortMode === 'byType') {
+    filteredViews.sort(function(a, b) {
+      var typeA = (a.typeName || '').toString();
+      var typeB = (b.typeName || '').toString();
+      if (typeA !== typeB) return typeA.localeCompare(typeB);
+      return (a.name || '').toString().localeCompare((b.name || '').toString());
+    });
+  } else if (sortMode === 'byFolder') {
+    filteredViews.sort(function(a, b) {
+      var folderA = (a.folderPath || '').toString();
+      var folderB = (b.folderPath || '').toString();
+      if (folderA !== folderB) return folderA.localeCompare(folderB);
+      return (a.name || '').toString().localeCompare((b.name || '').toString());
+    });
+  }
+  
+  // Группировка по категориям при необходимости
+  var html = '<table><thead><tr><th>Вид</th><th>Тип';
+  if (sortMode === 'byFolder') html += ' / Папка';
+  html += '</th></tr></thead><tbody>';
+  
+  var lastCategory = '';
+  for (var i = 0; i < filteredViews.length; i++) {
+    var v = filteredViews[i];
+    var name = (v.name || '').toString();
+    var typeName = (v.typeName || '').toString();
+    var folderPath = (v.folderPath || '').toString();
     var guid = (v.guid || '').toString();
+    
+    // Добавляем заголовки групп
+    var currentCategory = '';
+    if (sortMode === 'byType') currentCategory = typeName;
+    else if (sortMode === 'byFolder') currentCategory = folderPath || '(без папки)';
+    
+    if (sortMode !== 'all' && currentCategory !== lastCategory) {
+      html += '<tr class="category-header"><td colspan="2" style="background:#e8e6e3;font-weight:600;padding:4px 6px;">' + escapeHtml(currentCategory) + '</td></tr>';
+      lastCategory = currentCategory;
+    }
+    
     var sel = (selectedViewGuid === guid) ? ' selected' : '';
-    html += '<tr data-guid="' + escapeHtml(guid) + '" class="' + sel + '"><td>' + escapeHtml(name) + '</td><td>' + escapeHtml(typeName) + '</td></tr>';
+    var secondCol = sortMode === 'byFolder' ? (typeName + (folderPath ? ' / ' + folderPath : '')) : typeName;
+    html += '<tr data-guid="' + escapeHtml(guid) + '" class="' + sel + '"><td>' + escapeHtml(name) + '</td><td>' + escapeHtml(secondCol) + '</td></tr>';
   }
   html += '</tbody></table>';
   container.innerHTML = html;
@@ -541,6 +596,12 @@ function init() {
   }
   document.getElementById('view-search').addEventListener('input', function() {
     renderViewList(this.value);
+  });
+  // Обработчики для радио-кнопок сортировки видов
+  document.querySelectorAll('input[name="view-sort"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      renderViewList(document.getElementById('view-search').value);
+    });
   });
   document.getElementById('btn-add').addEventListener('click', addToQueue);
   document.getElementById('btn-ok').addEventListener('click', onOkClick);

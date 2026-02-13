@@ -29,6 +29,7 @@ namespace LayoutHelper {
 		API_Guid viewGuid;
 		GS::UniString name;
 		GS::UniString typeName;  // «План», «Разрез», «Документ из 3D» и т.д.
+		GS::UniString folderPath;  // Путь папки в навигаторе (например, "Планы этажей/1-й этаж")
 	};
 
 	/** Список видов из View Map, которые можно разместить на макете (планы, разрезы, фасады, детали, Документы из 3D) */

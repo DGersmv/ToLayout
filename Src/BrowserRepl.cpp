@@ -572,6 +572,7 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 			obj->AddItem("guid", new JS::Value(APIGuidToString(views[i].viewGuid)));
 			obj->AddItem("name", new JS::Value(views[i].name));
 			obj->AddItem("typeName", new JS::Value(views[i].typeName));
+			obj->AddItem("folderPath", new JS::Value(views[i].folderPath));
 			jsArr->AddItem(obj);
 		}
 		return jsArr;
