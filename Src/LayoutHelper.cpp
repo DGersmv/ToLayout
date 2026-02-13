@@ -1007,12 +1007,10 @@ static void GetGridRegionRect (const API_LayoutInfo& layoutInfo,
 	const double cellW = (availW - (gridCols - 1) * gap) / gridCols;
 	const double cellH = (availH - (gridRows - 1) * gap) / gridRows;
 	outLeftMm   = layoutInfo.leftMargin + startCol * (cellW + gap);
-	// В HTML-палитре строки нумеруются сверху вниз, а геометрия макета считает их от нижнего поля вверх.
-	// Конвертируем индекс строки: rowFromBottom = gridRows - (startRow + spanRows).
+	// В HTML передаётся regionStartRow уже как индекс ряда от низа листа (0 = нижний ряд).
 	if (spanRows < 1) spanRows = 1;
 	if (spanRows > gridRows) spanRows = gridRows;
-	Int32 rowFromBottom = gridRows - (startRow + spanRows);
-	if (rowFromBottom < 0) rowFromBottom = 0;
+	Int32 rowFromBottom = (startRow >= 0 && startRow < gridRows) ? startRow : 0;
 	outBottomMm = layoutInfo.bottomMargin + rowFromBottom * (cellH + gap);
 	outWidthMm  = spanCols * cellW + (spanCols > 1 ? (spanCols - 1) * gap : 0);
 	outHeightMm = spanRows * cellH + (spanRows > 1 ? (spanRows - 1) * gap : 0);
@@ -1068,6 +1066,13 @@ static void GetDrawingPositionForAnchor (const API_LayoutInfo& layoutInfo, Place
 
 // -----------------------------------------------------------------------------
 // Размещение связанного Drawing (вид → макет) по выбранному макету
+//
+// Логика для обеих палитр:
+// • Палитра «Расположить в макете»: 1) берём вид с плана (исходный масштаб);
+//   2) если галочка «Подогнать по размеру» — создаём Drawing с масштабом, подогнанным по размеру листа (через ratio). Вид не меняем.
+// • Палитра «Организация чертежей в макетах»: 1) берём указанный вид (по GUID);
+//   2) размещаем Drawing и подгоняем по размеру сектора (через ratio). Вид не меняем.
+// В обоих случаях вид остаётся как есть; подгон только у Drawing (ratio = viewScale / targetScale).
 // -----------------------------------------------------------------------------
 static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const PlaceParams& params)
 {
@@ -1090,11 +1095,37 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	API_LayoutInfo layoutInfo = {};
 	BNZeroMemory (&layoutInfo, sizeof (layoutInfo));
 	API_DatabaseUnId layoutDbId = chosenLayoutId;
-	if (ACAPI_Navigator_GetLayoutSets (&layoutInfo, &layoutDbId) != NoError) {
-		if (layoutInfo.customData != nullptr) {
-			delete layoutInfo.customData;
-			layoutInfo.customData = nullptr;
+	GSErrCode layoutSetsErr = ACAPI_Navigator_GetLayoutSets (&layoutInfo, &layoutDbId, nullptr);
+	if (layoutSetsErr != NoError && layoutInfo.customData != nullptr) {
+		delete layoutInfo.customData;
+		layoutInfo.customData = nullptr;
+	}
+	// Fallback: если размеры не получены (например, макет не текущее окно), переключаемся на макет и запрашиваем снова
+	if (layoutInfo.sizeX < 1.0 || layoutInfo.sizeY < 1.0) {
+		API_DatabaseInfo layoutDb = {};
+		layoutDb.databaseUnId = chosenLayoutId;
+		layoutDb.typeID = APIWind_LayoutID;
+		if (ACAPI_Database_ChangeCurrentDatabase (&layoutDb) == NoError) {
+			BNZeroMemory (&layoutInfo, sizeof (layoutInfo));
+			if (ACAPI_Navigator_GetLayoutSets (&layoutInfo, nullptr, nullptr) == NoError && layoutInfo.sizeX >= 1.0 && layoutInfo.sizeY >= 1.0) {
+				ACAPI_WriteReport ("ToLayout: размер макета получен после переключения на макет.", false);
+			}
+			ACAPI_Database_ChangeCurrentDatabase (&currentDb);
+			if (layoutInfo.customData != nullptr) {
+				delete layoutInfo.customData;
+				layoutInfo.customData = nullptr;
+			}
 		}
+	}
+	// Некоторые версии/контексты возвращают размеры в метрах (0.21 x 0.297); API указывает мм — приводим к мм при необходимости
+	if (layoutInfo.sizeX > 0.001 && layoutInfo.sizeX < 100.0 && layoutInfo.sizeY > 0.001 && layoutInfo.sizeY < 100.0) {
+		layoutInfo.sizeX *= 1000.0;
+		layoutInfo.sizeY *= 1000.0;
+		layoutInfo.leftMargin *= 1000.0;
+		layoutInfo.rightMargin *= 1000.0;
+		layoutInfo.topMargin *= 1000.0;
+		layoutInfo.bottomMargin *= 1000.0;
+		ACAPI_WriteReport ("ToLayout: размеры макета переведены из метров в мм.", false);
 	}
 	if (params.useGridRegion && (layoutInfo.sizeX < 1.0 || layoutInfo.sizeY < 1.0)) {
 		ACAPI_WriteReport ("LayoutHelper: не удалось получить размер выбранного макета (GetLayoutSets).", true);
@@ -1179,8 +1210,13 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			regionLeftMm, regionBottomMm, regionWmm, regionHmm);
 	}
 	const bool fitToRegion = params.useGridRegion && regionWmm > 1.0 && regionHmm > 1.0;
+	// Подгон: «Расположить» — по листу (fitScaleToLayout), «Организация» — по сектору (fitToRegion)
+	const bool wantFit = (params.fitScaleToLayout || fitToRegion) && hasZoomBox;
+	if (wantFit && (layoutInfo.sizeX < 1.0 || layoutInfo.sizeY < 1.0)) {
+		ACAPI_WriteReport ("ToLayout: подгон масштаба пропущен — размер макета неизвестен (sizeX/sizeY).", false);
+	}
 	// При размещении в сектор — тот же принцип, что «Подогнать масштаб» в палитре «Расположить в макете»: подгонка по области (здесь область = сектор), размещение по точке (LB сектора, якорь LB).
-	if ((params.fitScaleToLayout || fitToRegion) && hasZoomBox) {
+	if (wantFit) {
 		double extentW = zoomBox.xMax - zoomBox.xMin;
 		double extentH = zoomBox.yMax - zoomBox.yMin;
 		if (extentW > 1e-6 && extentH > 1e-6) {
@@ -1247,19 +1283,8 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 				ACAPI_WriteReport ("Не удалось получить вид для размещения.", true);
 				return false;
 			}
-			API_NavigatorItem navItem = {};
-			navItem.guid = viewGuidForDrawing;
-			navItem.mapId = API_PublicViewMap;
-			API_NavigatorView navView = {};
-			if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-				navView.drawingScale = static_cast<Int32> (currentScale);
-				navView.saveDScale = true;
-				ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-				if (navView.layerStats != nullptr) {
-					delete navView.layerStats;
-					navView.layerStats = nullptr;
-				}
-			}
+			// Не меняем масштаб вида — подгон только через ratio у Drawing, иначе вид «прыгает» и масштаб применяется дважды (вид + ratio)
+			// Раньше здесь вызывался ChangeNavigatorView(currentScale) — убрано.
 		}
 	}
 	// Если extent нулевой (например при RT/RB после смены вида) — берём zoom из размещаемого вида
@@ -1364,10 +1389,9 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	if (err != NoError)
 		return false;
 	
-	// Формула: масштаб Drawing = масштаб вида * ratio
-	// Поэтому: ratio = желаемый_масштаб / масштаб_вида
-	// Это позволяет Drawing иметь независимый масштаб без изменения оригинального вида
-	double ratio = (viewScaleBeforeFit > 1e-6) ? (currentScale / viewScaleBeforeFit) : 1.0;
+	// Подгон по размеру листа/сектора: ratio = «размер Drawing / исходный размер вида».
+	// viewScaleBeforeFit — масштаб вида (не меняем вид); currentScale — целевой масштаб на макете.
+	double ratio = (currentScale > 1e-6) ? (viewScaleBeforeFit / currentScale) : 1.0;
 	
 	element.drawing.drawingGuid = viewGuidForDrawing;
 	element.drawing.nameType = APIName_ViewOrSrcFileName;  // Сохраняем имя вида (AC27; в новее — APIName_ReferenceName)
@@ -1376,13 +1400,14 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	element.drawing.anchorPoint = anchorId;
 	element.drawing.useOwnOrigoAsAnchor = false;
 	element.drawing.pos = drawPos;
-	element.drawing.isCutWithFrame = true;
+	// false: не обрезать по рамке — рамка по умолчанию может не совпадать с нашим расчётом (scale/ratio), из‑за чего чертёж обрезался по сторонам
+	element.drawing.isCutWithFrame = false;
 
 	// Лог параметров размещения Drawing
 	{
 		char msg[512];
 		std::snprintf (msg, sizeof (msg),
-			"ToLayout Drawing params: viewScale=%.1f, targetScale=%.1f, ratio=%.4f, nameType=ReferenceName",
+			"ToLayout Drawing params: viewScale=%.1f, targetScale=%.1f, ratio=%.4f",
 			viewScaleBeforeFit, currentScale, ratio);
 		ACAPI_WriteReport (msg, false);
 	}
