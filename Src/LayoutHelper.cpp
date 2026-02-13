@@ -1167,6 +1167,9 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		hasZoomBox = GetMarqueeBounds (zoomBox);
 	if (!placeByGuid && !hasZoomBox)
 		hasZoomBox = GetSelectionBoundsWithMargin (zoomBox);
+	// Инициализация масштаба из текущего вида перед подгонкой
+	double currentScale = GetCurrentDrawingScale ();
+	double viewScaleBeforeFit = currentScale;  // масштаб вида до подгонки (для восстановления при placeByGuid)
 	if (!placeByGuid && !hasZoomBox) {
 		API_Guid currentViewGuid = {};
 		if (GetCurrentViewNavigatorItem (currentViewGuid)) {
@@ -1177,6 +1180,11 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
 				zoomBox = navView.zoom;
 				hasZoomBox = (navView.zoom.xMax > navView.zoom.xMin + 1e-6 && navView.zoom.yMax > navView.zoom.yMin + 1e-6);
+				// Читаем масштаб из навигатора вида, если он сохранён
+				if (navView.saveDScale) {
+					currentScale = static_cast<double> (navView.drawingScale);
+					viewScaleBeforeFit = currentScale;
+				}
 				if (navView.layerStats != nullptr) {
 					delete navView.layerStats;
 					navView.layerStats = nullptr;
@@ -1184,8 +1192,6 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 			}
 		}
 	}
-	double currentScale = GetCurrentDrawingScale ();
-	double viewScaleBeforeFit = currentScale;  // масштаб вида до подгонки (для восстановления при placeByGuid)
 	if (placeByGuid) {
 		API_NavigatorItem navItem = {};
 		navItem.guid = params.placeViewGuid;
