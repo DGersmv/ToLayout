@@ -1370,7 +1370,7 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	double ratio = (viewScaleBeforeFit > 1e-6) ? (currentScale / viewScaleBeforeFit) : 1.0;
 	
 	element.drawing.drawingGuid = viewGuidForDrawing;
-	element.drawing.nameType = APIName_ReferenceName;  // Сохраняем имя вида
+	element.drawing.nameType = APIName_ViewOrSrcFileName;  // Сохраняем имя вида (AC27; в новее — APIName_ReferenceName)
 	CHCopyC (drawingName.ToCStr (CC_UTF8).Get (), element.drawing.name);
 	element.drawing.ratio = ratio;  // Независимый масштаб для Drawing
 	element.drawing.anchorPoint = anchorId;

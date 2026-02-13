@@ -23,14 +23,16 @@ static GS::UniString LoadOrganizeLayoutsHtml()
 }
 
 // --------------------- Notification handler ---------------------
+// APINotify_ViewSettingsChanged доступен только в новее AC27
+#ifdef APINotify_ViewSettingsChanged
 static GSErrCode OrganizeLayoutsNotificationHandler(API_NotifyEventID notifID, Int32 /*param*/)
 {
-	// APINotify_ViewSettingsChanged - вызывается при изменениях в Navigator (создание/удаление/изменение видов)
 	if (notifID == APINotify_ViewSettingsChanged) {
 		OrganizeLayoutsPalette::UpdateViewListOnHTML();
 	}
 	return NoError;
 }
+#endif
 
 static GSErrCode OrganizeLayoutsPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
@@ -84,10 +86,9 @@ OrganizeLayoutsPalette::OrganizeLayoutsPalette()
 	m_browserCtrl = new DG::Browser(GetReference(), OrganizeLayoutsBrowserCtrlId);
 	Attach(*this);
 	BeginEventProcessing();
-	
-	// Регистрация обработчика уведомлений для автообновления списка видов
+#ifdef APINotify_ViewSettingsChanged
 	ACAPI_ProjectOperation_CatchProjectEvent(APINotify_ViewSettingsChanged, OrganizeLayoutsNotificationHandler);
-
+#endif
 	Init();
 }
 
@@ -164,7 +165,7 @@ void OrganizeLayoutsPalette::UpdateViewListOnHTML()
 	
 	// Вызываем JavaScript-функцию loadPlaceableViews() для обновления списка видов
 	GS::UniString jsCode = "if (typeof loadPlaceableViews === 'function') { loadPlaceableViews(); }";
-	palette.m_browserCtrl->ExecuteJavaScript(jsCode);
+	palette.m_browserCtrl->ExecuteJS(jsCode);
 }
 
 GSErrCode OrganizeLayoutsPalette::RegisterPaletteControlCallBack()
