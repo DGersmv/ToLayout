@@ -66,8 +66,6 @@ namespace LayoutHelper {
 		Int32 regionSpanCols = 1;
 		/** Размещать по GUID вида (из списка); если APINULLGuid — текущий вид */
 		API_Guid placeViewGuid = APINULLGuid;
-		/** Для палитры «Организация чертежей»: клонировать вид в temp_<имя> и размещать клон, не трогая исходный */
-		bool cloneViewForPlacement = false;
 	};
 
 	/**

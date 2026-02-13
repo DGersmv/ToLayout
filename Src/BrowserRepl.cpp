@@ -667,10 +667,6 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				p.regionSpanRows = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
 			if (tbl.Get("regionSpanCols", &item))
 				p.regionSpanCols = static_cast<Int32>(GetDoubleFromJs(GS::DynamicCast<JS::Value>(item), 1));
-			if (tbl.Get("cloneViewForPlacement", &item)) {
-				if (GS::Ref<JS::Value> vv = GS::DynamicCast<JS::Value>(item))
-					p.cloneViewForPlacement = vv->GetBool();
-			}
 		} else if (GS::Ref<JS::Value> v = GS::DynamicCast<JS::Value>(param)) {
 			p.layoutIndex = static_cast<Int32>(v->GetInteger());
 		}

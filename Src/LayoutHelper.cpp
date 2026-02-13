@@ -1150,41 +1150,15 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	GS::UniString drawingName = params.drawingName.IsEmpty () ? GS::UniString ("Новый вид") : params.drawingName;
 	API_Guid viewGuidForDrawing = APINULLGuid;
 	if (placeByGuid) {
-		if (params.cloneViewForPlacement) {
-			// Проверяем имя вида - если он уже начинается с "temp_", не клонируем повторно
-			API_NavigatorItem checkItem = {};
-			checkItem.guid = params.placeViewGuid;
-			checkItem.mapId = API_PublicViewMap;
-			bool skipCloning = false;
-			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &checkItem) == NoError) {
-				GS::UniString viewName = GS::UniString (checkItem.uName);
-				if (viewName.BeginsWith (GS::UniString ("temp_"))) {
-					// Вид уже клон - используем напрямую, не клонируем повторно
-					skipCloning = true;
-					viewGuidForDrawing = params.placeViewGuid;
-					drawingName = viewName;
-				}
-			}
-			
-			if (!skipCloning) {
-				GS::UniString cloneName;
-				API_Guid cloneGuid = CloneViewMapViewToTemp (params.placeViewGuid, cloneName);
-				if (cloneGuid == APINULLGuid) {
-					ACAPI_WriteReport ("LayoutHelper: не удалось клонировать вид (temp_имя); размещение отменено.", true);
-					return false;
-				}
-				viewGuidForDrawing = cloneGuid;
-				drawingName = cloneName;
-			}
-		} else {
-			viewGuidForDrawing = params.placeViewGuid;
-			if (drawingName == GS::UniString ("Новый вид")) {
-				API_NavigatorItem navItem = {};
-				navItem.guid = params.placeViewGuid;
-				navItem.mapId = API_PublicViewMap;
-				if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
-					drawingName = GS::UniString (navItem.uName);
-			}
+		// Всегда используем оригинальный вид напрямую - без клонирования
+		// Это позволяет размещать один вид несколько раз на разных макетах
+		viewGuidForDrawing = params.placeViewGuid;
+		if (drawingName == GS::UniString ("Новый вид")) {
+			API_NavigatorItem navItem = {};
+			navItem.guid = params.placeViewGuid;
+			navItem.mapId = API_PublicViewMap;
+			if (ACAPI_Navigator_GetNavigatorItem (&params.placeViewGuid, &navItem) == NoError)
+				drawingName = GS::UniString (navItem.uName);
 		}
 	} else {
 		// В режиме «Выбрать по рамке» — вид как есть, без фильтра слоёв; обрезка по рамке через клон (не трогаем текущий вид)
@@ -1330,7 +1304,8 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
 
-	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем. Используем viewGuidForDrawing (клон при cloneViewForPlacement или исходный вид).
+	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем. Используем viewGuidForDrawing (всегда оригинальный вид, без клонирования).
+	// Этот подход позволяет размещать один вид несколько раз на разных макетах с разными масштабами.
 	const bool needTempViewScale = placeByGuid && (currentScale > 0) && (fabs (currentScale - viewScaleBeforeFit) > 0.01);
 	if (needTempViewScale) {
 		API_NavigatorItem navItem = {};
