@@ -212,24 +212,22 @@ GS::Array<PlaceableViewItem> GetPlaceableViews ()
 			
 			// Получаем путь папки для вида
 			pvi.folderPath = GS::UniString ("");
-			API_Guid parentGuid = items[i].parent;
+			API_Guid currentGuid = items[i].guid;
 			int depth = 0;
-			while (parentGuid != APINULLGuid && depth < 10) {  // ограничение глубины для безопасности
+			while (depth < 10) {  // ограничение глубины для безопасности
 				API_NavigatorItem parentItem = {};
-				parentItem.guid = parentGuid;
+				BNZeroMemory (&parentItem, sizeof (parentItem));
 				parentItem.mapId = API_PublicViewMap;
-				if (ACAPI_Navigator_GetNavigatorItem (&parentGuid, &parentItem) == NoError) {
-					GS::UniString folderName = GS::UniString (parentItem.uName);
-					if (!folderName.IsEmpty ()) {
-						if (pvi.folderPath.IsEmpty ())
-							pvi.folderPath = folderName;
-						else
-							pvi.folderPath = folderName + GS::UniString ("/") + pvi.folderPath;
-					}
-					parentGuid = parentItem.parent;
-				} else {
+				if (ACAPI_Navigator_GetNavigatorParentItem (&currentGuid, &parentItem) != NoError)
 					break;
+				GS::UniString folderName = GS::UniString (parentItem.uName);
+				if (!folderName.IsEmpty ()) {
+					if (pvi.folderPath.IsEmpty ())
+						pvi.folderPath = folderName;
+					else
+						pvi.folderPath = folderName + GS::UniString ("/") + pvi.folderPath;
 				}
+				currentGuid = parentItem.guid;
 				depth++;
 			}
 			
