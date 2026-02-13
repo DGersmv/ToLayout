@@ -18,7 +18,8 @@
     .view-list table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .view-list th { text-align: left; background: #dcd9d4; padding: 4px 6px; }
     .view-list td { padding: 4px 6px; border-bottom: 1px solid #eee; cursor: pointer; }
-    .view-list tr:hover td { background: #f3f1ee; }
+    .view-list tr.view-row:hover td { background: #f3f1ee; }
+    .view-list tr.folder-row:hover td { background: #e8e6e3; }
     .view-list tr.selected td { background: #d4e8d4; }
     .queue-list { max-height: 100px; overflow-y: auto; border: 1px solid #c8c4c0; background: #fff; font-size: 11px; padding: 4px; }
     .queue-item { padding: 2px 0; border-bottom: 1px solid #eee; }
@@ -113,6 +114,7 @@ var selectedViewGuid = null;
 var selectedSectorRow = null;
 var selectedSectorCol = null;
 var lastAspect = 'landscape';
+var expandedFolders = new Set();  // Для отслеживания раскрытых папок
 
 function setInfo(msg) {
   var el = document.getElementById('info-msg');
@@ -336,7 +338,7 @@ function renderViewList(filterStr) {
   var sortModeEl = document.querySelector('input[name="view-sort"]:checked');
   var sortMode = sortModeEl ? sortModeEl.value : 'all';
   
-  // Фильтрация и сортировка
+  // Фильтрация
   var filteredViews = [];
   for (var i = 0; i < placeableViews.length; i++) {
     var v = placeableViews[i];
@@ -347,59 +349,162 @@ function renderViewList(filterStr) {
     filteredViews.push(v);
   }
   
-  // Сортировка по выбранному режиму
-  if (sortMode === 'byType') {
-    filteredViews.sort(function(a, b) {
-      var typeA = (a.typeName || '').toString();
-      var typeB = (b.typeName || '').toString();
-      if (typeA !== typeB) return typeA.localeCompare(typeB);
-      return (a.name || '').toString().localeCompare((b.name || '').toString());
-    });
-  } else if (sortMode === 'byFolder') {
-    filteredViews.sort(function(a, b) {
-      var folderA = (a.folderPath || '').toString();
-      var folderB = (b.folderPath || '').toString();
-      if (folderA !== folderB) return folderA.localeCompare(folderB);
-      return (a.name || '').toString().localeCompare((b.name || '').toString());
-    });
-  }
+  var html = '<table><thead><tr><th>Вид</th><th>Тип</th></tr></thead><tbody>';
   
-  // Группировка по категориям при необходимости
-  var html = '<table><thead><tr><th>Вид</th><th>Тип';
-  if (sortMode === 'byFolder') html += ' / Папка';
-  html += '</th></tr></thead><tbody>';
-  
-  var lastCategory = '';
-  for (var i = 0; i < filteredViews.length; i++) {
-    var v = filteredViews[i];
-    var name = (v.name || '').toString();
-    var typeName = (v.typeName || '').toString();
-    var folderPath = (v.folderPath || '').toString();
-    var guid = (v.guid || '').toString();
-    
-    // Добавляем заголовки групп
-    var currentCategory = '';
-    if (sortMode === 'byType') currentCategory = typeName;
-    else if (sortMode === 'byFolder') currentCategory = folderPath || '(без папки)';
-    
-    if (sortMode !== 'all' && currentCategory !== lastCategory) {
-      html += '<tr class="category-header"><td colspan="2" style="background:#e8e6e3;font-weight:600;padding:4px 6px;">' + escapeHtml(currentCategory) + '</td></tr>';
-      lastCategory = currentCategory;
+  if (sortMode === 'byFolder') {
+    // Иерархический вид с папками
+    html = renderHierarchicalView(filteredViews, q);
+  } else {
+    // Плоский список (как раньше)
+    if (sortMode === 'byType') {
+      filteredViews.sort(function(a, b) {
+        var typeA = (a.typeName || '').toString();
+        var typeB = (b.typeName || '').toString();
+        if (typeA !== typeB) return typeA.localeCompare(typeB);
+        return (a.name || '').toString().localeCompare((b.name || '').toString());
+      });
     }
     
-    var sel = (selectedViewGuid === guid) ? ' selected' : '';
-    var secondCol = sortMode === 'byFolder' ? (typeName + (folderPath ? ' / ' + folderPath : '')) : typeName;
-    html += '<tr data-guid="' + escapeHtml(guid) + '" class="' + sel + '"><td>' + escapeHtml(name) + '</td><td>' + escapeHtml(secondCol) + '</td></tr>';
+    html = '<table><thead><tr><th>Вид</th><th>Тип</th></tr></thead><tbody>';
+    var lastCategory = '';
+    for (var i = 0; i < filteredViews.length; i++) {
+      var v = filteredViews[i];
+      var name = (v.name || '').toString();
+      var typeName = (v.typeName || '').toString();
+      var guid = (v.guid || '').toString();
+      
+      if (sortMode === 'byType') {
+        if (typeName !== lastCategory) {
+          html += '<tr class="category-header"><td colspan="2" style="background:#e8e6e3;font-weight:600;padding:4px 6px;">' + escapeHtml(typeName) + '</td></tr>';
+          lastCategory = typeName;
+        }
+      }
+      
+      var sel = (selectedViewGuid === guid) ? ' selected' : '';
+      html += '<tr data-guid="' + escapeHtml(guid) + '" class="view-row' + sel + '"><td>' + escapeHtml(name) + '</td><td>' + escapeHtml(typeName) + '</td></tr>';
+    }
+    html += '</tbody></table>';
   }
-  html += '</tbody></table>';
+  
   container.innerHTML = html;
-  container.querySelectorAll('tr[data-guid]').forEach(function(tr) {
+  
+  // Добавляем обработчики для видов
+  container.querySelectorAll('tr.view-row').forEach(function(tr) {
     tr.addEventListener('click', function() {
       selectedViewGuid = tr.getAttribute('data-guid');
       container.querySelectorAll('tr').forEach(function(r) { r.classList.remove('selected'); });
       tr.classList.add('selected');
     });
   });
+  
+  // Добавляем обработчики для папок
+  container.querySelectorAll('tr.folder-row').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var folderPath = tr.getAttribute('data-folder');
+      if (expandedFolders.has(folderPath)) {
+        expandedFolders.delete(folderPath);
+      } else {
+        expandedFolders.add(folderPath);
+      }
+      renderViewList(filterStr);
+    });
+  });
+}
+
+function renderHierarchicalView(filteredViews, filter) {
+  var isFiltering = filter && filter.length > 0;
+  var foldersTree = {};
+  var rootViews = [];
+  
+  // Строим дерево папок
+  filteredViews.forEach(function(v) {
+    var folderPath = (v.folderPath || '').toString();
+    if (!folderPath) {
+      rootViews.push(v);
+      return;
+    }
+    
+    var pathParts = folderPath.split('/').filter(Boolean);
+    var node = foldersTree;
+    
+    for (var i = 0; i < pathParts.length; i++) {
+      var part = pathParts[i];
+      if (!node[part]) {
+        node[part] = { _views: [], _children: {} };
+      }
+      if (i === pathParts.length - 1) {
+        node[part]._views.push(v);
+      } else {
+        node = node[part]._children;
+      }
+    }
+  });
+  
+  var html = '<table><thead><tr><th>Вид</th><th>Тип</th></tr></thead><tbody>';
+  var indentUnit = '\u00A0\u00A0';
+  
+  function addFoldersToTable(tree, parentPath, depth) {
+    var folderNames = Object.keys(tree).sort(function(a, b) { return a.localeCompare(b); });
+    
+    folderNames.forEach(function(folderName) {
+      var folderNode = tree[folderName];
+      var currentPath = parentPath ? parentPath + '/' + folderName : folderName;
+      var hasSubfolders = folderNode._children && Object.keys(folderNode._children).length > 0;
+      var hasViews = folderNode._views && folderNode._views.length > 0;
+      var hasChildren = hasSubfolders || hasViews;
+      var isExpanded = isFiltering || expandedFolders.has(currentPath);
+      
+      // Строка папки
+      var indicator = hasChildren ? (isExpanded ? '▾ ' : '▸ ') : '  ';
+      html += '<tr class="folder-row" data-folder="' + escapeHtml(currentPath) + '" style="cursor:pointer;background:#f5f3f0;">';
+      html += '<td>' + indentUnit.repeat(depth) + indicator + '📁 ' + escapeHtml(folderName) + '</td>';
+      html += '<td style="color:#888;">папка</td></tr>';
+      
+      // Если раскрыта - показываем содержимое
+      if (isExpanded) {
+        // Подпапки
+        if (hasSubfolders) {
+          addFoldersToTable(folderNode._children, currentPath, depth + 1);
+        }
+        
+        // Виды в этой папке
+        if (hasViews) {
+          folderNode._views.sort(function(a, b) {
+            return (a.name || '').toString().localeCompare((b.name || '').toString());
+          }).forEach(function(v) {
+            var name = (v.name || '').toString();
+            var typeName = (v.typeName || '').toString();
+            var guid = (v.guid || '').toString();
+            var sel = (selectedViewGuid === guid) ? ' selected' : '';
+            html += '<tr data-guid="' + escapeHtml(guid) + '" class="view-row' + sel + '">';
+            html += '<td>' + indentUnit.repeat(depth + 1) + '📄 ' + escapeHtml(name) + '</td>';
+            html += '<td>' + escapeHtml(typeName) + '</td></tr>';
+          });
+        }
+      }
+    });
+  }
+  
+  // Корневые папки
+  addFoldersToTable(foldersTree, '', 0);
+  
+  // Виды без папки
+  if (rootViews.length > 0) {
+    rootViews.sort(function(a, b) {
+      return (a.name || '').toString().localeCompare((b.name || '').toString());
+    }).forEach(function(v) {
+      var name = (v.name || '').toString();
+      var typeName = (v.typeName || '').toString();
+      var guid = (v.guid || '').toString();
+      var sel = (selectedViewGuid === guid) ? ' selected' : '';
+      html += '<tr data-guid="' + escapeHtml(guid) + '" class="view-row' + sel + '">';
+      html += '<td>📄 ' + escapeHtml(name) + '</td>';
+      html += '<td>' + escapeHtml(typeName) + '</td></tr>';
+    });
+  }
+  
+  html += '</tbody></table>';
+  return html;
 }
 
 function renderQueue() {
