@@ -167,6 +167,8 @@ GS::Array<MasterLayoutItem> GetMasterLayoutList ()
 
 // -----------------------------------------------------------------------------
 // GetPlaceableViews — виды из View Map для палитры «Организация чертежей»
+// Рекурсивный обход дерева View Map: получаем ВСЕ типы видов (планы, разрезы, фасады и т.д.)
+// и путь папки для каждого. SearchNavigatorItem по типу может не находить виды в подпапках.
 // -----------------------------------------------------------------------------
 static const char* ViewTypeDisplayName (API_NavigatorItemTypeID itemType)
 {
@@ -178,61 +180,72 @@ static const char* ViewTypeDisplayName (API_NavigatorItemTypeID itemType)
 		case API_DetailDrawingNavItem:      return "Деталь";
 		case API_WorksheetDrawingNavItem:   return "Рабочий лист";
 		case API_DocumentFrom3DNavItem:     return "Документ из 3D";
+		case API_PerspectiveNavItem:        return "Перспектива";
+		case API_AxonometryNavItem:         return "Аксонометрия";
 		default:                            return "Вид";
+	}
+}
+
+static bool IsPlaceableViewType (API_NavigatorItemTypeID itemType)
+{
+	switch (itemType) {
+		case API_StoryNavItem:
+		case API_SectionNavItem:
+		case API_ElevationNavItem:
+		case API_InteriorElevationNavItem:
+		case API_DetailDrawingNavItem:
+		case API_WorksheetDrawingNavItem:
+		case API_DocumentFrom3DNavItem:
+		case API_PerspectiveNavItem:
+		case API_AxonometryNavItem:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static void CollectPlaceableViewsRecursive (const API_NavigatorItem& node,
+	const GS::UniString& parentFolderPath, GS::Array<PlaceableViewItem>& result)
+{
+	if (IsPlaceableViewType (node.itemType)) {
+		PlaceableViewItem pvi;
+		pvi.viewGuid = node.guid;
+		pvi.name = GS::UniString (node.uName);
+		if (pvi.name.IsEmpty ())
+			pvi.name = GS::UniString ("Без имени");
+		pvi.typeName = GS::UniString (ViewTypeDisplayName (node.itemType));
+		pvi.folderPath = parentFolderPath;
+		result.Push (pvi);
+	}
+	GS::Array<API_NavigatorItem> children;
+	API_NavigatorItem nodeCopy = node;
+	if (ACAPI_Navigator_GetNavigatorChildrenItems (&nodeCopy, &children) != NoError)
+		return;
+	GS::UniString nodeName = GS::UniString (node.uName);
+	GS::UniString childFolderPath = parentFolderPath;
+	if (node.itemType == API_FolderNavItem && !nodeName.IsEmpty ()) {
+		childFolderPath = parentFolderPath.IsEmpty () ? nodeName : (parentFolderPath + GS::UniString ("/") + nodeName);
+	}
+	for (UIndex i = 0; i < children.GetSize (); i++) {
+		CollectPlaceableViewsRecursive (children[i], childFolderPath, result);
 	}
 }
 
 GS::Array<PlaceableViewItem> GetPlaceableViews ()
 {
 	GS::Array<PlaceableViewItem> result;
-	const API_NavigatorItemTypeID types[] = {
-		API_StoryNavItem,
-		API_SectionNavItem,
-		API_ElevationNavItem,
-		API_InteriorElevationNavItem,
-		API_DetailDrawingNavItem,
-		API_WorksheetDrawingNavItem,
-		API_DocumentFrom3DNavItem
-	};
-	for (API_NavigatorItemTypeID itemType : types) {
-		API_NavigatorItem navItem = {};
-		BNZeroMemory (&navItem, sizeof (navItem));
-		navItem.mapId = API_PublicViewMap;
-		navItem.itemType = itemType;
-		GS::Array<API_NavigatorItem> items;
-		if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError)
-			continue;
-		for (UIndex i = 0; i < items.GetSize (); i++) {
-			PlaceableViewItem pvi;
-			pvi.viewGuid = items[i].guid;
-			pvi.name = GS::UniString (items[i].uName);
-			if (pvi.name.IsEmpty ())
-				pvi.name = GS::UniString ("Без имени");
-			pvi.typeName = GS::UniString (ViewTypeDisplayName (itemType));
-			
-			// Получаем путь папки для вида
-			pvi.folderPath = GS::UniString ("");
-			API_Guid currentGuid = items[i].guid;
-			int depth = 0;
-			while (depth < 10) {  // ограничение глубины для безопасности
-				API_NavigatorItem parentItem = {};
-				BNZeroMemory (&parentItem, sizeof (parentItem));
-				parentItem.mapId = API_PublicViewMap;
-				if (ACAPI_Navigator_GetNavigatorParentItem (&currentGuid, &parentItem) != NoError)
-					break;
-				GS::UniString folderName = GS::UniString (parentItem.uName);
-				if (!folderName.IsEmpty ()) {
-					if (pvi.folderPath.IsEmpty ())
-						pvi.folderPath = folderName;
-					else
-						pvi.folderPath = folderName + GS::UniString ("/") + pvi.folderPath;
-				}
-				currentGuid = parentItem.guid;
-				depth++;
-			}
-			
-			result.Push (pvi);
-		}
+	API_NavigatorSet viewSet = {};
+	viewSet.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorSet (&viewSet, nullptr) != NoError)
+		return result;
+	API_NavigatorItem rootItem = {};
+	rootItem.guid = viewSet.rootGuid;
+	rootItem.mapId = API_PublicViewMap;
+	GS::Array<API_NavigatorItem> rootChildren;
+	if (ACAPI_Navigator_GetNavigatorChildrenItems (&rootItem, &rootChildren) != NoError)
+		return result;
+	for (UIndex i = 0; i < rootChildren.GetSize (); i++) {
+		CollectPlaceableViewsRecursive (rootChildren[i], GS::UniString (""), result);
 	}
 	return result;
 }
@@ -1136,7 +1149,6 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		}
 	}
 	double currentScale = GetCurrentDrawingScale ();
-	double viewScaleBeforeFit = currentScale;  // масштаб вида до подгонки (для восстановления при placeByGuid)
 	if (placeByGuid) {
 		API_NavigatorItem navItem = {};
 		navItem.guid = params.placeViewGuid;
@@ -1145,7 +1157,6 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
 			if (navView.saveDScale)
 				currentScale = static_cast<double> (navView.drawingScale);
-			viewScaleBeforeFit = currentScale;
 			if (navView.layerStats != nullptr) {
 				delete navView.layerStats;
 				navView.layerStats = nullptr;
@@ -1346,6 +1357,7 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	if (err != NoError)
 		return false;
 	element.drawing.drawingGuid = viewGuidForDrawing;
+	// Имя чертежа = имя вида из палитры. Исходный вид в навигаторе не модифицируем (кроме врем. масштаба при fit).
 	element.drawing.nameType = APIName_CustomName;
 	CHCopyC (drawingName.ToCStr (CC_UTF8).Get (), element.drawing.name);
 	element.drawing.ratio = 1.0;
@@ -1354,10 +1366,10 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
 
-	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем. Используем viewGuidForDrawing (всегда оригинальный вид, без клонирования).
-	// Этот подход позволяет размещать один вид несколько раз на разных макетах с разными масштабами.
-	const bool needTempViewScale = placeByGuid && (currentScale > 0) && (fabs (currentScale - viewScaleBeforeFit) > 0.01);
-	if (needTempViewScale) {
+	// При размещении по GUID: размер чертежа на макете берётся из масштаба вида.
+	// Просто записываем виду нужный масштаб — без клонирования и без восстановления.
+	// Вид получит масштаб, подходящий для размещения на макете.
+	if (placeByGuid && currentScale > 0) {
 		API_NavigatorItem navItem = {};
 		navItem.guid = viewGuidForDrawing;
 		navItem.mapId = API_PublicViewMap;
@@ -1389,22 +1401,6 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		ACAPI_Database_ChangeCurrentDatabase (&currentDb);
 		return createErr;
 	});
-
-	if (needTempViewScale) {
-		API_NavigatorItem navItem = {};
-		navItem.guid = viewGuidForDrawing;
-		navItem.mapId = API_PublicViewMap;
-		API_NavigatorView navView = {};
-		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-			navView.drawingScale = static_cast<Int32> (viewScaleBeforeFit);
-			navView.saveDScale = true;
-			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-			if (navView.layerStats != nullptr) {
-				delete navView.layerStats;
-				navView.layerStats = nullptr;
-			}
-		}
-	}
 
 	if (err != NoError) {
 		ACAPI_WriteReport ("LayoutHelper: не удалось создать Drawing на макете", true);

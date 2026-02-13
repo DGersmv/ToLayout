@@ -89,7 +89,10 @@
       <label style="font-size:11px;"><input type="radio" name="view-sort" value="byType" /> По типу</label>
       <label style="font-size:11px;"><input type="radio" name="view-sort" value="byFolder" /> По папкам</label>
     </div>
-    <input type="text" id="view-search" placeholder="Поиск по имени вида…" style="width:100%;margin-bottom:4px;" />
+    <div class="grid-row" style="margin-bottom:4px;">
+      <input type="text" id="view-search" placeholder="Поиск по имени вида…" style="flex:1;" />
+      <button type="button" class="btn btn-secondary" id="btn-refresh-views" title="Обновить списки видов и макетов">Обновить</button>
+    </div>
     <div id="view-list-container" class="view-list">Загрузка…</div>
     <button type="button" class="btn" id="btn-add" style="margin-top:6px;">Добавить в очередь</button>
   </div>
@@ -145,12 +148,25 @@ function renderLayoutTable(filterStr) {
   var html = '<table><tbody>';
   for (var gi = 0; gi < layoutGroupsData.length; gi++) {
     var g = layoutGroupsData[gi];
+    var groupName = (g.groupName || '').toString();
     var items = g.layouts || [];
+    var groupHasVisible = false;
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var name = (it.name || '').toString();
+      if (q && name.toLowerCase().indexOf(q) === -1 && groupName.toLowerCase().indexOf(q) === -1) continue;
+      groupHasVisible = true;
+      break;
+    }
+    if (!groupHasVisible && items.length > 0) continue;
+    if (groupName && groupName !== 'Без папки') {
+      html += '<tr class="category-header"><td colspan="1" style="background:#e8e6e3;font-weight:600;padding:4px 6px;">' + escapeHtml(groupName) + '</td></tr>';
+    }
     for (var k = 0; k < items.length; k++) {
       var it = items[k];
       var globalIndex = typeof it.index === 'number' ? it.index : k;
       var name = (it.name || ('Макет ' + (globalIndex + 1))).toString();
-      if (q && name.toLowerCase().indexOf(q) === -1) continue;
+      if (q && name.toLowerCase().indexOf(q) === -1 && groupName.toLowerCase().indexOf(q) === -1) continue;
       html += '<tr data-index="' + globalIndex + '"><td>' + escapeHtml(name) + '</td></tr>';
     }
   }
@@ -364,10 +380,8 @@ function renderViewList(filterStr) {
     });
   }
   
-  // Группировка по категориям при необходимости
-  var html = '<table><thead><tr><th>Вид</th><th>Тип';
-  if (sortMode === 'byFolder') html += ' / Папка';
-  html += '</th></tr></thead><tbody>';
+  // Группировка по категориям. Во всех режимах показываем папку, если есть.
+  var html = '<table><thead><tr><th>Вид</th><th>Тип / Папка</th></tr></thead><tbody>';
   
   var lastCategory = '';
   for (var i = 0; i < filteredViews.length; i++) {
@@ -388,7 +402,7 @@ function renderViewList(filterStr) {
     }
     
     var sel = (selectedViewGuid === guid) ? ' selected' : '';
-    var secondCol = sortMode === 'byFolder' ? (typeName + (folderPath ? ' / ' + folderPath : '')) : typeName;
+    var secondCol = typeName + (folderPath ? ' / ' + folderPath : '');
     html += '<tr data-guid="' + escapeHtml(guid) + '" class="' + sel + '"><td>' + escapeHtml(name) + '</td><td>' + escapeHtml(secondCol) + '</td></tr>';
   }
   html += '</tbody></table>';
@@ -496,6 +510,7 @@ function onOkClick() {
       setInfo('Размещено: ' + itemsToPlace.length + ' вид(ов).');
       queue = [];
       renderQueue();
+      refreshAll();
       return;
     }
     var item = itemsToPlace[idx];
@@ -515,8 +530,7 @@ function onOkClick() {
       regionStartCol: item.startCol,
       regionSpanRows: item.spanRows,
       regionSpanCols: item.spanCols,
-      placeViewGuid: item.viewGuid,
-      cloneViewForPlacement: true
+      placeViewGuid: item.viewGuid
     };
     A.PlaceOnLayout(params).then(function(success) {
       if (!success) {
@@ -532,6 +546,13 @@ function onOkClick() {
     });
   }
   placeNext();
+}
+
+function refreshAll() {
+  updateLayoutTable();
+  loadPlaceableViews().then(function() {
+    setInfo('Списки обновлены.');
+  }).catch(function() {});
 }
 
 function init() {
@@ -596,6 +617,9 @@ function init() {
   }
   document.getElementById('view-search').addEventListener('input', function() {
     renderViewList(this.value);
+  });
+  document.getElementById('btn-refresh-views').addEventListener('click', function() {
+    refreshAll();
   });
   // Обработчики для радио-кнопок сортировки видов
   document.querySelectorAll('input[name="view-sort"]').forEach(function(radio) {
