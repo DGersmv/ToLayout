@@ -1345,32 +1345,28 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 	GSErrCode err = ACAPI_Element_GetDefaults (&element, nullptr);
 	if (err != NoError)
 		return false;
+	
+	// Формула: масштаб Drawing = масштаб вида * ratio
+	// Поэтому: ratio = желаемый_масштаб / масштаб_вида
+	// Это позволяет Drawing иметь независимый масштаб без изменения оригинального вида
+	double ratio = (viewScaleBeforeFit > 1e-6) ? (currentScale / viewScaleBeforeFit) : 1.0;
+	
 	element.drawing.drawingGuid = viewGuidForDrawing;
-	element.drawing.nameType = APIName_CustomName;
+	element.drawing.nameType = APIName_ReferenceName;  // Сохраняем имя вида
 	CHCopyC (drawingName.ToCStr (CC_UTF8).Get (), element.drawing.name);
-	element.drawing.ratio = 1.0;
+	element.drawing.ratio = ratio;  // Независимый масштаб для Drawing
 	element.drawing.anchorPoint = anchorId;
 	element.drawing.useOwnOrigoAsAnchor = false;
 	element.drawing.pos = drawPos;
 	element.drawing.isCutWithFrame = true;
 
-	// При размещении по GUID размер чертежа на макете берётся из масштаба вида. Временно выставляем масштаб вида в currentScale, чтобы Drawing получил нужный размер; после размещения восстанавливаем. Используем viewGuidForDrawing (всегда оригинальный вид, без клонирования).
-	// Этот подход позволяет размещать один вид несколько раз на разных макетах с разными масштабами.
-	const bool needTempViewScale = placeByGuid && (currentScale > 0) && (fabs (currentScale - viewScaleBeforeFit) > 0.01);
-	if (needTempViewScale) {
-		API_NavigatorItem navItem = {};
-		navItem.guid = viewGuidForDrawing;
-		navItem.mapId = API_PublicViewMap;
-		API_NavigatorView navView = {};
-		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-			navView.drawingScale = static_cast<Int32> (currentScale);
-			navView.saveDScale = true;
-			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-			if (navView.layerStats != nullptr) {
-				delete navView.layerStats;
-				navView.layerStats = nullptr;
-			}
-		}
+	// Лог параметров размещения Drawing
+	{
+		char msg[512];
+		std::snprintf (msg, sizeof (msg),
+			"ToLayout Drawing params: viewScale=%.1f, targetScale=%.1f, ratio=%.4f, nameType=ReferenceName",
+			viewScaleBeforeFit, currentScale, ratio);
+		ACAPI_WriteReport (msg, false);
 	}
 
 	err = ACAPI_CallUndoableCommand ("Place view on layout", [&] () -> GSErrCode {
@@ -1389,22 +1385,6 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 		ACAPI_Database_ChangeCurrentDatabase (&currentDb);
 		return createErr;
 	});
-
-	if (needTempViewScale) {
-		API_NavigatorItem navItem = {};
-		navItem.guid = viewGuidForDrawing;
-		navItem.mapId = API_PublicViewMap;
-		API_NavigatorView navView = {};
-		if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-			navView.drawingScale = static_cast<Int32> (viewScaleBeforeFit);
-			navView.saveDScale = true;
-			ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-			if (navView.layerStats != nullptr) {
-				delete navView.layerStats;
-				navView.layerStats = nullptr;
-			}
-		}
-	}
 
 	if (err != NoError) {
 		ACAPI_WriteReport ("LayoutHelper: не удалось создать Drawing на макете", true);
