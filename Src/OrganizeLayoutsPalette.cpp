@@ -22,6 +22,16 @@ static GS::UniString LoadOrganizeLayoutsHtml()
 	return html;
 }
 
+// --------------------- Notification handler ---------------------
+static GSErrCode OrganizeLayoutsNotificationHandler(API_NotifyEventID notifID, Int32 /*param*/)
+{
+	// APINotify_ViewSettingsChanged - вызывается при изменениях в Navigator (создание/удаление/изменение видов)
+	if (notifID == APINotify_ViewSettingsChanged) {
+		OrganizeLayoutsPalette::UpdateViewListOnHTML();
+	}
+	return NoError;
+}
+
 static GSErrCode OrganizeLayoutsPaletteCallback(Int32 /*refCon*/, API_PaletteMessageID messageID, GS::IntPtr param)
 {
 	switch (messageID) {
@@ -74,6 +84,9 @@ OrganizeLayoutsPalette::OrganizeLayoutsPalette()
 	m_browserCtrl = new DG::Browser(GetReference(), OrganizeLayoutsBrowserCtrlId);
 	Attach(*this);
 	BeginEventProcessing();
+	
+	// Регистрация обработчика уведомлений для автообновления списка видов
+	ACAPI_ProjectOperation_CatchProjectEvent(APINotify_ViewSettingsChanged, OrganizeLayoutsNotificationHandler);
 
 	Init();
 }
@@ -138,6 +151,20 @@ void OrganizeLayoutsPalette::HidePalette()
 		return;
 
 	GetInstance().Hide();
+}
+
+void OrganizeLayoutsPalette::UpdateViewListOnHTML()
+{
+	if (!HasInstance())
+		return;
+	
+	OrganizeLayoutsPalette& palette = GetInstance();
+	if (palette.m_browserCtrl == nullptr)
+		return;
+	
+	// Вызываем JavaScript-функцию loadPlaceableViews() для обновления списка видов
+	GS::UniString jsCode = "if (typeof loadPlaceableViews === 'function') { loadPlaceableViews(); }";
+	palette.m_browserCtrl->ExecuteJavaScript(jsCode);
 }
 
 GSErrCode OrganizeLayoutsPalette::RegisterPaletteControlCallBack()

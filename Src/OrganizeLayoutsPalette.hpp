@@ -19,6 +19,8 @@ public:
 	static void           ShowPalette();
 	static void           HidePalette();
 	static GSErrCode      RegisterPaletteControlCallBack();
+	
+	static void           UpdateViewListOnHTML();  // Обновление списка видов в HTML
 
 	virtual ~OrganizeLayoutsPalette();
 
