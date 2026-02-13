@@ -187,6 +187,14 @@
   <div class="section" id="mode-new-layout-name">
     <div class="section-title">Имя макета</div>
     <input type="text" class="text-input" id="layout-name" placeholder="Новый макет" />
+    
+    <label class="anchor-cell" style="display:flex;align-items:center;gap:8px;margin:8px 0 4px 0;">
+      <input type="checkbox" id="use-folder" />
+      <span>Разместить в папку</span>
+    </label>
+    <select class="layout-select" id="folder-select" style="display:none;margin-top:4px;">
+      <option value="">Выберите папку...</option>
+    </select>
   </div>
 
   <div class="section" id="mode-existing-block" style="display:none;">
@@ -310,6 +318,33 @@ function updateMasterSelect() {
     }
   }).catch(function() {
     sel.innerHTML = '<option value="-1">Ошибка загрузки</option>';
+  });
+}
+
+function updateFolderSelect() {
+  var A = window.ACAPI;
+  var sel = document.getElementById('folder-select');
+  if (!sel) return;
+  
+  if (!A || typeof A.GetLayoutFolders !== 'function') {
+    sel.innerHTML = '<option value="">GetLayoutFolders недоступен</option>';
+    return;
+  }
+
+  A.GetLayoutFolders().then(function(folders) {
+    sel.innerHTML = '<option value="">Выберите папку...</option>';
+    if (!folders || folders.length === 0) {
+      sel.innerHTML += '<option value="" disabled>Нет папок (создайте макет с именем "Папка/Макет")</option>';
+      return;
+    }
+    for (var i = 0; i < folders.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = folders[i].folderName;
+      opt.textContent = folders[i].folderName;
+      sel.appendChild(opt);
+    }
+  }).catch(function() {
+    sel.innerHTML = '<option value="">Ошибка загрузки</option>';
   });
 }
 
@@ -515,10 +550,19 @@ function onOkClick() {
       return;
     }
 
+    // Получаем выбранную папку, если чекбокс активен
+    var targetFolder = '';
+    var useFolderCheckbox = document.getElementById('use-folder');
+    var folderSelect = document.getElementById('folder-select');
+    if (useFolderCheckbox && useFolderCheckbox.checked && folderSelect) {
+      targetFolder = folderSelect.value || '';
+    }
+
     params = {
       masterLayoutIndex: masterIndex,
       layoutIndex: 0,
       layoutName: layoutName,
+      targetFolder: targetFolder,
       drawingName: drawingName,
       anchorPosition: anchorValue,
       fitScaleToLayout: fitScaleToLayout,
@@ -544,7 +588,17 @@ function onOkClick() {
 function init() {
   updateSelectionList();
   updateMasterSelect();
+  updateFolderSelect();
   setupModeSwitch();
+
+  // Обработчик чекбокса "Разместить в папку"
+  var useFolderCheckbox = document.getElementById('use-folder');
+  var folderSelect = document.getElementById('folder-select');
+  if (useFolderCheckbox && folderSelect) {
+    useFolderCheckbox.addEventListener('change', function() {
+      folderSelect.style.display = this.checked ? '' : 'none';
+    });
+  }
 
   document.getElementById('btn-ok').addEventListener('click', onOkClick);
 

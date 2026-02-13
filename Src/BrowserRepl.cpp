@@ -503,6 +503,17 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 		return jsGroups;
 		}));
 
+	jsACAPI->AddItem(new JS::Function("GetLayoutFolders", [](GS::Ref<JS::Base>) {
+		const GS::Array<LayoutHelper::LayoutFolderItem> folders = LayoutHelper::GetLayoutFolders();
+		GS::Ref<JS::Array> jsArr = new JS::Array();
+		for (UIndex i = 0; i < folders.GetSize(); ++i) {
+			GS::Ref<JS::Object> obj = new JS::Object();
+			obj->AddItem("folderName", new JS::Value(folders[i].folderName));
+			jsArr->AddItem(obj);
+		}
+		return jsArr;
+		}));
+
 	jsACAPI->AddItem(new JS::Function("GetMasterLayouts", [](GS::Ref<JS::Base>) {
 		const GS::Array<LayoutHelper::MasterLayoutItem> masters = LayoutHelper::GetMasterLayoutList();
 		GS::Ref<JS::Array> jsArr = new JS::Array();
@@ -600,6 +611,8 @@ void BrowserRepl::RegisterACAPIJavaScriptObject(DG::Browser& targetBrowser)
 				p.drawingName = GetStringFromJavaScriptVariable(item);
 			if (tbl.Get("layoutName", &item))
 				p.layoutName = GetStringFromJavaScriptVariable(item);
+			if (tbl.Get("targetFolder", &item))
+				p.targetFolder = GetStringFromJavaScriptVariable(item);
 
 			// Точка привязки вида на макете (радиокнопки LB/LT/RT/RB/MM)
 			// Читаем максимально устойчиво: сначала строку, при неудаче — возможное целочисленное значение.

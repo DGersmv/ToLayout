@@ -12,6 +12,11 @@ namespace LayoutHelper {
 		GS::UniString name;
 	};
 
+	/** Папка макетов */
+	struct LayoutFolderItem {
+		GS::UniString folderName;  // Имя папки (например, "Планы", "Разрезы")
+	};
+
 	/** Шаблон макета (мастер-макет из папки Основные: Титульный лист, Обложка и т.п.) */
 	struct MasterLayoutItem {
 		API_DatabaseUnId databaseUnId;
@@ -20,6 +25,9 @@ namespace LayoutHelper {
 
 	/** Список макетов проекта (Layout databases) */
 	GS::Array<LayoutItem> GetLayoutList ();
+
+	/** Список папок макетов (уникальные папки из имен макетов) */
+	GS::Array<LayoutFolderItem> GetLayoutFolders ();
 
 	/** Список мастер-макетов (шаблоны: Титульный лист, Обложка) */
 	GS::Array<MasterLayoutItem> GetMasterLayoutList ();
@@ -51,6 +59,7 @@ namespace LayoutHelper {
 		Int32 masterLayoutIndex;    // индекс шаблона (0-based), -1 = использовать существующий layoutIndex
 		Int32 layoutIndex;          // индекс существующего макета (если masterLayoutIndex < 0)
 		GS::UniString layoutName;   // имя для нового макета
+		GS::UniString targetFolder; // папка для размещения макета (например, "Планы"); пустая строка = без папки
 		double scale;               // 100 = 1:100
 		GS::UniString drawingName;  // имя вида (заголовок Drawing)
 		Anchor anchorPosition = Anchor::LeftBottom;

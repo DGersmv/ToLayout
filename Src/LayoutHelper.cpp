@@ -109,6 +109,34 @@ GS::Array<LayoutItem> GetLayoutList ()
 }
 
 // -----------------------------------------------------------------------------
+// GetLayoutFolders — список уникальных папок макетов
+// -----------------------------------------------------------------------------
+GS::Array<LayoutFolderItem> GetLayoutFolders ()
+{
+	GS::Array<LayoutFolderItem> result;
+	GS::HashTable<GS::UniString, bool> uniqueFolders;
+	
+	const GS::Array<LayoutItem> layouts = GetLayoutList ();
+	for (UIndex i = 0; i < layouts.GetSize (); ++i) {
+		const GS::UniString& fullName = layouts[i].name;
+		
+		// Ищем разделитель '/' для определения папки
+		USize slashPos = fullName.FindFirst (GS::UniChar ('/'));
+		if (slashPos != MaxUSize) {
+			GS::UniString folderName = fullName.GetSubstring (0, slashPos);
+			if (!uniqueFolders.ContainsKey (folderName)) {
+				uniqueFolders.Add (folderName, true);
+				LayoutFolderItem item;
+				item.folderName = folderName;
+				result.Push (item);
+			}
+		}
+	}
+	
+	return result;
+}
+
+// -----------------------------------------------------------------------------
 // GetMasterLayoutList — шаблоны из папки Основные (Титульный лист, Обложка)
 // -----------------------------------------------------------------------------
 GS::Array<MasterLayoutItem> GetMasterLayoutList ()
@@ -1417,6 +1445,10 @@ bool PlaceSelectionOnLayoutWithParams (const PlaceParams& params)
 			return false;
 		}
 		GS::UniString layoutName = params.layoutName.IsEmpty () ? GS::UniString ("Новый макет") : params.layoutName;
+		// Добавляем папку к имени макета, если указана
+		if (!params.targetFolder.IsEmpty ()) {
+			layoutName = params.targetFolder + GS::UniString ("/") + layoutName;
+		}
 		BNZeroMemory (layoutInfo.layoutName, sizeof (layoutInfo.layoutName));
 		GS::snuprintf (layoutInfo.layoutName, API_UniLongNameLen, "%s", layoutName.ToCStr (CC_UTF8).Get ());
 		if (layoutInfo.customData != nullptr) {
