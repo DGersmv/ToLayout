@@ -88,6 +88,7 @@
       <label style="font-size:11px;"><input type="radio" name="view-sort" value="all" checked /> Все виды</label>
       <label style="font-size:11px;"><input type="radio" name="view-sort" value="byType" /> По типу</label>
       <label style="font-size:11px;"><input type="radio" name="view-sort" value="byFolder" /> По папкам</label>
+      <button type="button" class="btn btn-secondary" id="btn-refresh" style="margin-left:auto;padding:4px 8px;font-size:10px;">↻ Обновить</button>
     </div>
     <input type="text" id="view-search" placeholder="Поиск по имени вида…" style="width:100%;margin-bottom:4px;" />
     <div id="view-list-container" class="view-list">Загрузка…</div>
@@ -496,6 +497,8 @@ function onOkClick() {
       setInfo('Размещено: ' + itemsToPlace.length + ' вид(ов).');
       queue = [];
       renderQueue();
+      // Обновляем список видов после размещения (на случай, если были созданы новые виды)
+      loadPlaceableViews().catch(function() {});
       return;
     }
     var item = itemsToPlace[idx];
@@ -515,8 +518,7 @@ function onOkClick() {
       regionStartCol: item.startCol,
       regionSpanRows: item.spanRows,
       regionSpanCols: item.spanCols,
-      placeViewGuid: item.viewGuid,
-      cloneViewForPlacement: true
+      placeViewGuid: item.viewGuid
     };
     A.PlaceOnLayout(params).then(function(success) {
       if (!success) {
@@ -605,6 +607,19 @@ function init() {
   });
   document.getElementById('btn-add').addEventListener('click', addToQueue);
   document.getElementById('btn-ok').addEventListener('click', onOkClick);
+  
+  // Обработчик для кнопки обновления списка видов
+  var btnRefresh = document.getElementById('btn-refresh');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', function() {
+      setInfo('Обновление списка видов…');
+      loadPlaceableViews().then(function() {
+        setInfo('Список видов обновлён.');
+      }).catch(function() {
+        setInfo('Ошибка обновления списка видов.');
+      });
+    });
+  }
 }
 
 function whenReady(cb) {

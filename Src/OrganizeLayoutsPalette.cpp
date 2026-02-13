@@ -140,6 +140,15 @@ void OrganizeLayoutsPalette::HidePalette()
 	GetInstance().Hide();
 }
 
+void OrganizeLayoutsPalette::UpdateViewListOnHTML()
+{
+	if (!HasInstance() || !GetInstance().IsVisible())
+		return;
+
+	if (GetInstance().m_browserCtrl != nullptr)
+		GetInstance().m_browserCtrl->ExecuteJS("if (typeof loadPlaceableViews === 'function') loadPlaceableViews();");
+}
+
 GSErrCode OrganizeLayoutsPalette::RegisterPaletteControlCallBack()
 {
 	return ACAPI_RegisterModelessWindow(

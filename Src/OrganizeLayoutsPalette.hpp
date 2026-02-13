@@ -18,6 +18,7 @@ public:
 
 	static void           ShowPalette();
 	static void           HidePalette();
+	static void           UpdateViewListOnHTML();
 	static GSErrCode      RegisterPaletteControlCallBack();
 
 	virtual ~OrganizeLayoutsPalette();

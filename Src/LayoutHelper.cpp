@@ -903,15 +903,20 @@ static API_Guid CloneViewToViewMapWithLayerFilter (const GS::HashSet<API_Attribu
 		return clonedGuid;
 	}
 	API_Attr_Head tempLayerCombHead = {};
-	if (!CreateLayerCombForSelection (selectedLayers, tempLayerCombHead))
-		return clonedGuid;
+	if (!CreateLayerCombForSelection (selectedLayers, tempLayerCombHead)) {
+		// Не удалось создать комбинацию слоёв — удаляем неполный клон
+		ACAPI_Navigator_DeleteNavigatorItem (&clonedGuid);
+		return APINULLGuid;
+	}
 	API_NavigatorItem clonedNavItem = {};
 	clonedNavItem.guid = clonedGuid;
 	clonedNavItem.mapId = API_PublicViewMap;
 	API_NavigatorView navView = {};
 	if (ACAPI_Navigator_GetNavigatorView (&clonedNavItem, &navView) != NoError) {
+		// Не удалось получить настройки вида — удаляем неполный клон
+		ACAPI_Navigator_DeleteNavigatorItem (&clonedGuid);
 		if (navView.layerStats != nullptr) { delete navView.layerStats; navView.layerStats = nullptr; }
-		return clonedGuid;
+		return APINULLGuid;
 	}
 	if (navView.layerStats != nullptr) {
 		delete navView.layerStats;
@@ -1224,24 +1229,14 @@ static bool DoPlaceLinkedDrawingOnLayout (API_DatabaseUnId chosenLayoutId, const
 				selectedLayers, static_cast<Int32> (currentScale), drawingName, &zoomBox);
 		}
 		if (viewGuidForDrawing == APINULLGuid) {
+			// Не удалось создать клон — используем текущий вид без изменений
 			GetCurrentViewNavigatorItem (viewGuidForDrawing);
 			if (viewGuidForDrawing == APINULLGuid) {
 				ACAPI_WriteReport ("Не удалось получить вид для размещения.", true);
 				return false;
 			}
-			API_NavigatorItem navItem = {};
-			navItem.guid = viewGuidForDrawing;
-			navItem.mapId = API_PublicViewMap;
-			API_NavigatorView navView = {};
-			if (ACAPI_Navigator_GetNavigatorView (&navItem, &navView) == NoError) {
-				navView.drawingScale = static_cast<Int32> (currentScale);
-				navView.saveDScale = true;
-				ACAPI_Navigator_ChangeNavigatorView (&navItem, &navView);
-				if (navView.layerStats != nullptr) {
-					delete navView.layerStats;
-					navView.layerStats = nullptr;
-				}
-			}
+			// НЕ изменяем масштаб текущего вида! Используем его как есть.
+			// Пользователь может вручную настроить масштаб перед размещением.
 		}
 	}
 	// Если extent нулевой (например при RT/RB после смены вида) — берём zoom из размещаемого вида
