@@ -194,7 +194,12 @@ GS::Array<PlaceableViewItem> GetPlaceableViews ()
 		API_WorksheetDrawingNavItem,
 		API_DocumentFrom3DNavItem
 	};
-	for (API_NavigatorItemTypeID itemType : types) {
+	
+	// Диагностика: счётчики по типам видов
+	int typeCounts[7] = {0};
+	
+	for (size_t typeIdx = 0; typeIdx < 7; typeIdx++) {
+		API_NavigatorItemTypeID itemType = types[typeIdx];
 		API_NavigatorItem navItem = {};
 		BNZeroMemory (&navItem, sizeof (navItem));
 		navItem.mapId = API_PublicViewMap;
@@ -202,6 +207,9 @@ GS::Array<PlaceableViewItem> GetPlaceableViews ()
 		GS::Array<API_NavigatorItem> items;
 		if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError)
 			continue;
+		
+		typeCounts[typeIdx] = items.GetSize();
+		
 		for (UIndex i = 0; i < items.GetSize (); i++) {
 			PlaceableViewItem pvi;
 			pvi.viewGuid = items[i].guid;
@@ -234,6 +242,16 @@ GS::Array<PlaceableViewItem> GetPlaceableViews ()
 			result.Push (pvi);
 		}
 	}
+	
+	// Логирование найденных видов по типам
+	char msg[512];
+	std::snprintf (msg, sizeof (msg),
+		"GetPlaceableViews: Планы=%d, Разрезы=%d, Фасады=%d, Внутр.фасады=%d, Детали=%d, Рабочие листы=%d, Документы3D=%d, Всего=%d",
+		typeCounts[0], typeCounts[1], typeCounts[2], typeCounts[3], 
+		typeCounts[4], typeCounts[5], typeCounts[6], 
+		static_cast<int>(result.GetSize()));
+	ACAPI_WriteReport (msg, false);
+	
 	return result;
 }
 
