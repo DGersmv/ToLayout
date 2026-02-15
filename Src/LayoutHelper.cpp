@@ -167,6 +167,9 @@ GS::Array<MasterLayoutItem> GetMasterLayoutList ()
 
 // -----------------------------------------------------------------------------
 // GetPlaceableViews — виды из View Map для палитры «Организация чертежей»
+// Использует рекурсивный обход дерева View Map (GetNavigatorChildrenItems),
+// чтобы найти ВСЕ виды во всех папках — планы этажей, разрезы, фасады, детали и т.д.
+// SearchNavigatorItem может не возвращать виды, находящиеся во вложенных папках.
 // -----------------------------------------------------------------------------
 static const char* ViewTypeDisplayName (API_NavigatorItemTypeID itemType)
 {
@@ -182,76 +185,89 @@ static const char* ViewTypeDisplayName (API_NavigatorItemTypeID itemType)
 	}
 }
 
+static bool IsPlaceableViewType (API_NavigatorItemTypeID itemType)
+{
+	switch (itemType) {
+		case API_StoryNavItem:
+		case API_SectionNavItem:
+		case API_ElevationNavItem:
+		case API_InteriorElevationNavItem:
+		case API_DetailDrawingNavItem:
+		case API_WorksheetDrawingNavItem:
+		case API_DocumentFrom3DNavItem:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static void CollectPlaceableViewsRecursive (const API_NavigatorItem& node,
+	const GS::UniString& parentFolderPath, GS::Array<PlaceableViewItem>& outResult, int* typeCounts, int maxDepth)
+{
+	if (maxDepth <= 0)
+		return;
+	GS::Array<API_NavigatorItem> children;
+	API_NavigatorItem nodeCopy = node;
+	nodeCopy.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorChildrenItems (&nodeCopy, &children) != NoError)
+		return;
+	// Путь папки для видов в этой ветке: если узел — папка с именем, добавляем его к пути
+	GS::UniString currentFolderPath = parentFolderPath;
+	GS::UniString nodeName = GS::UniString (node.uName);
+	bool isFolder = (node.itemType == API_FolderNavItem || node.itemType == API_ProjectNavItem);
+	if (isFolder && !nodeName.IsEmpty () && nodeName != GS::UniString ("View Map")) {
+		currentFolderPath = parentFolderPath.IsEmpty () ? nodeName : (parentFolderPath + GS::UniString ("/") + nodeName);
+	}
+	for (UIndex i = 0; i < children.GetSize (); i++) {
+		const API_NavigatorItem& child = children[i];
+		if (IsPlaceableViewType (child.itemType)) {
+			PlaceableViewItem pvi;
+			pvi.viewGuid = child.guid;
+			pvi.name = GS::UniString (child.uName);
+			if (pvi.name.IsEmpty ())
+				pvi.name = GS::UniString ("Без имени");
+			pvi.typeName = GS::UniString (ViewTypeDisplayName (child.itemType));
+			pvi.folderPath = currentFolderPath;
+			outResult.Push (pvi);
+			if (typeCounts) {
+				switch (child.itemType) {
+					case API_StoryNavItem:              typeCounts[0]++; break;
+					case API_SectionNavItem:            typeCounts[1]++; break;
+					case API_ElevationNavItem:          typeCounts[2]++; break;
+					case API_InteriorElevationNavItem:  typeCounts[3]++; break;
+					case API_DetailDrawingNavItem:      typeCounts[4]++; break;
+					case API_WorksheetDrawingNavItem:   typeCounts[5]++; break;
+					case API_DocumentFrom3DNavItem:     typeCounts[6]++; break;
+					default: break;
+				}
+			}
+		}
+		// Рекурсивно обходим дочерние узлы (в т.ч. вложенные папки)
+		CollectPlaceableViewsRecursive (child, currentFolderPath, outResult, typeCounts, maxDepth - 1);
+	}
+}
+
 GS::Array<PlaceableViewItem> GetPlaceableViews ()
 {
 	GS::Array<PlaceableViewItem> result;
-	const API_NavigatorItemTypeID types[] = {
-		API_StoryNavItem,
-		API_SectionNavItem,
-		API_ElevationNavItem,
-		API_InteriorElevationNavItem,
-		API_DetailDrawingNavItem,
-		API_WorksheetDrawingNavItem,
-		API_DocumentFrom3DNavItem
-	};
-	
-	// Диагностика: счётчики по типам видов
 	int typeCounts[7] = {0};
-	
-	for (size_t typeIdx = 0; typeIdx < 7; typeIdx++) {
-		API_NavigatorItemTypeID itemType = types[typeIdx];
-		API_NavigatorItem navItem = {};
-		BNZeroMemory (&navItem, sizeof (navItem));
-		navItem.mapId = API_PublicViewMap;
-		navItem.itemType = itemType;
-		GS::Array<API_NavigatorItem> items;
-		if (ACAPI_Navigator_SearchNavigatorItem (&navItem, &items) != NoError)
-			continue;
-		
-		typeCounts[typeIdx] = items.GetSize();
-		
-		for (UIndex i = 0; i < items.GetSize (); i++) {
-			PlaceableViewItem pvi;
-			pvi.viewGuid = items[i].guid;
-			pvi.name = GS::UniString (items[i].uName);
-			if (pvi.name.IsEmpty ())
-				pvi.name = GS::UniString ("Без имени");
-			pvi.typeName = GS::UniString (ViewTypeDisplayName (itemType));
-			
-			// Получаем путь папки для вида
-			pvi.folderPath = GS::UniString ("");
-			API_Guid currentGuid = items[i].guid;
-			int depth = 0;
-			while (depth < 10) {  // ограничение глубины для безопасности
-				API_NavigatorItem parentItem = {};
-				BNZeroMemory (&parentItem, sizeof (parentItem));
-				parentItem.mapId = API_PublicViewMap;
-				if (ACAPI_Navigator_GetNavigatorParentItem (&currentGuid, &parentItem) != NoError)
-					break;
-				GS::UniString folderName = GS::UniString (parentItem.uName);
-				if (!folderName.IsEmpty ()) {
-					if (pvi.folderPath.IsEmpty ())
-						pvi.folderPath = folderName;
-					else
-						pvi.folderPath = folderName + GS::UniString ("/") + pvi.folderPath;
-				}
-				currentGuid = parentItem.guid;
-				depth++;
-			}
-			
-			result.Push (pvi);
-		}
-	}
-	
+	API_NavigatorSet viewSet = {};
+	viewSet.mapId = API_PublicViewMap;
+	if (ACAPI_Navigator_GetNavigatorSet (&viewSet) != NoError)
+		return result;
+	API_NavigatorItem rootItem = {};
+	BNZeroMemory (&rootItem, sizeof (rootItem));
+	rootItem.guid = viewSet.rootGuid;
+	rootItem.mapId = API_PublicViewMap;
+	CollectPlaceableViewsRecursive (rootItem, GS::UniString (""), result, typeCounts, 20);
 	// Логирование найденных видов по типам
 	char msg[512];
 	std::snprintf (msg, sizeof (msg),
 		"GetPlaceableViews: Планы=%d, Разрезы=%d, Фасады=%d, Внутр.фасады=%d, Детали=%d, Рабочие листы=%d, Документы3D=%d, Всего=%d",
-		typeCounts[0], typeCounts[1], typeCounts[2], typeCounts[3], 
-		typeCounts[4], typeCounts[5], typeCounts[6], 
+		typeCounts[0], typeCounts[1], typeCounts[2], typeCounts[3],
+		typeCounts[4], typeCounts[5], typeCounts[6],
 		static_cast<int>(result.GetSize()));
 	ACAPI_WriteReport (msg, false);
-	
 	return result;
 }
 

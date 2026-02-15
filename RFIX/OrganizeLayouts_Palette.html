@@ -48,6 +48,7 @@
 <body>
 <div class="palette">
   <h1>Организация чертежей в макетах</h1>
+  <button type="button" class="btn btn-secondary" id="btn-refresh" style="margin-bottom:10px;">Обновить</button>
 
   <div class="section">
     <div class="section-title">Макет</div>
@@ -639,6 +640,17 @@ function onOkClick() {
   placeNext();
 }
 
+function refreshLayoutsAndViews() {
+  setInfo('Обновление…');
+  updateLayoutTable();
+  loadPlaceableViews().then(function() {
+    setInfo('Списки макетов и видов обновлены.');
+    setTimeout(function() { setInfo(''); }, 2000);
+  }).catch(function() {
+    setInfo('Списки обновлены.');
+  });
+}
+
 function init() {
   updateLayoutTable();
   loadPlaceableViews();
@@ -701,6 +713,9 @@ function init() {
   }
   document.getElementById('view-search').addEventListener('input', function() {
     renderViewList(this.value);
+  });
+  document.getElementById('btn-refresh').addEventListener('click', function() {
+    refreshLayoutsAndViews();
   });
   // Обработчики для радио-кнопок сортировки видов
   document.querySelectorAll('input[name="view-sort"]').forEach(function(radio) {
